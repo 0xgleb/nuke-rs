@@ -12,6 +12,7 @@ use crate::subscribed::Never;
 
 /// Discriminated union of subject events, computed from a type-level
 /// subject list. See [`SubjectList`](crate::SubjectList).
+#[derive(Clone)]
 pub enum OneOf<Head, Tail> {
     Here(Head),
     There(Tail),

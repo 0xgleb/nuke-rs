@@ -15,6 +15,7 @@ pub mod error;
 pub mod evm;
 pub mod tracing;
 
+mod apalis;
 mod has_subject;
 mod macros;
 mod one_of;
@@ -58,12 +59,15 @@ pub mod prelude {
 /// Run a reactor against an EVM JSON-RPC websocket source.
 ///
 /// Reads `R::Subjects` at compile time, opens the corresponding
-/// subscriptions on `source`, and pumps decoded events into
-/// `reactor.react(...)` until the source ends or an error occurs.
+/// subscriptions on `source`, pipes decoded events through an internal
+/// apalis backend, and runs an apalis worker that calls
+/// `reactor.react(...)` per task until the source ends or an error
+/// occurs. The apalis layer is intentionally invisible to users.
 pub async fn run<R>(source: evm::EvmWsSource, reactor: std::sync::Arc<R>) -> Result<()>
 where
     R: Reactor + 'static,
     R::Subjects: evm::Subscribe<R::Subjects>,
+    <R::Subjects as SubjectList>::Event: Clone + Send + Sync + 'static,
 {
     evm::pump(source, reactor).await
 }

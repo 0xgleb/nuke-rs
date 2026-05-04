@@ -18,8 +18,10 @@ pub use transport::EvmWsSource;
 
 use std::sync::Arc;
 
+use crate::apalis::pump_through_apalis;
 use crate::error::{Error, Result};
 use crate::reactor::Reactor;
+use crate::subscribed::SubjectList;
 
 /// ABI decode failure for an on-chain log.
 #[derive(Debug, thiserror::Error)]
@@ -39,25 +41,18 @@ impl From<alloy_sol_types::Error> for DecodeError {
 }
 
 /// Run loop: open subscriptions for every subject in `R::Subjects`,
-/// then dispatch each incoming log into `reactor.react(...)` until the
-/// source ends or an error occurs.
+/// then drive the reactor through the internal apalis adapter
+/// ([`crate::apalis::pump_through_apalis`]) until the source ends or
+/// an error occurs.
 pub async fn pump<R>(mut source: EvmWsSource, reactor: Arc<R>) -> Result<()>
 where
     R: Reactor + 'static,
     R::Subjects: Subscribe<R::Subjects>,
+    <R::Subjects as SubjectList>::Event: Clone + Send + Sync + 'static,
 {
     let dispatcher = <R::Subjects as Subscribe<R::Subjects>>::open_all(&source).await?;
-
-    let mut log_stream = source
+    let log_stream = source
         .take_log_stream()
         .ok_or_else(|| Error::Config("EvmWsSource log stream already taken".into()))?;
-
-    while let Some(log) = log_stream.recv().await {
-        let event = dispatcher.dispatch(&log)?;
-        reactor
-            .react(event)
-            .await
-            .map_err(|error| Error::Reactor(Box::new(error)))?;
-    }
-    Ok(())
+    pump_through_apalis(log_stream, dispatcher, reactor).await
 }

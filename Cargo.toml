@@ -29,6 +29,7 @@ tokio = { version = "1.41", features = [
   "time",
   "net",
 ] }
+tokio-stream = "0.1"
 
 # WebSocket transport
 tokio-tungstenite = "0.29.0"
@@ -40,8 +41,15 @@ serde_json = "1"
 # Tower-style middleware (reserved for the EvmWsSource layer stack)
 tower = { version = "0.5.3", default-features = false, features = ["util"] }
 
-# Job execution
-apalis = { version = "=1.0.0-rc.7", default-features = false }
+# Job execution — apalis 1.x. Used internally by the Reactor adapter; the
+# public API stays in nuke vocab and never exposes apalis types. The
+# workflow crate gives us sequential + DAG composition for chained
+# reactions (the v0 reactor is single-step but the door is open).
+# Defaults bring in `sleep` (needed for the in-memory dequeue backend that
+# the Pipe adapter requires Clone on) plus tracing + retry/timeout layers.
+apalis = "=1.0.0-rc.7"
+apalis-core = "=1.0.0-rc.7"
+apalis-workflow = "=0.1.0-rc.7"
 
 # EVM types and ABI codegen (transport is nuke's own; alloy is for primitives + sol!)
 alloy-primitives = { version = "1.5", features = ["serde"] }

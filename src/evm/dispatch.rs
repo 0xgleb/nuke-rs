@@ -18,10 +18,15 @@ use crate::has_subject::HasSubject;
 use crate::subject::Subject;
 use crate::subscribed::{Cons, Nil, SubjectList};
 
+/// Boxed decoder: takes a [`RawLog`] and yields the reactor's event
+/// union (or a [`DecodeError`](crate::evm::DecodeError) wrapped in
+/// [`Error`]).
+type BoxedDecoder<L> = Box<dyn Fn(&RawLog) -> Result<<L as SubjectList>::Event> + Send + Sync>;
+
 /// Address-keyed dispatcher from [`RawLog`] to the reactor's typed
 /// event union.
 pub struct Dispatcher<L: SubjectList> {
-    table: HashMap<Address, Box<dyn Fn(&RawLog) -> Result<L::Event> + Send + Sync>>,
+    table: HashMap<Address, BoxedDecoder<L>>,
 }
 
 impl<L: SubjectList> Dispatcher<L> {

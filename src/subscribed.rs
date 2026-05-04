@@ -23,6 +23,7 @@ pub struct Nil;
 /// `enum Never {}` — uninhabited, so a `match` on it compiles only when
 /// every other arm is handled. This is what makes `.exhaustive()` a
 /// compile-time check.
+#[derive(Clone)]
 pub enum Never {}
 
 /// Declares which subjects a reactor handles.
