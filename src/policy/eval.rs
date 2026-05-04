@@ -432,6 +432,52 @@ mod tests {
         }
     }
 
+    /// End-to-end exercise of `#[derive(Domain)]` — generated module
+    /// `derived_order` exposes typed accessors and `Order::read_field`
+    /// drives the `Context` impl below.
+    mod derive_domain_smoke {
+        use super::*;
+        use crate::domain::{Px, Qty, Side};
+        use nuke_derive::Domain;
+
+        #[derive(Domain, Clone)]
+        pub struct DerivedOrder {
+            pub qty: Qty,
+            pub side: Side,
+            pub price: Px,
+        }
+
+        struct DerivedCtx(DerivedOrder);
+
+        impl Context for DerivedCtx {
+            fn lookup(&self, entity: &str, name: &str) -> Option<SlotValue> {
+                match entity {
+                    "derived_order" => self.0.read_field(name),
+                    _ => None,
+                }
+            }
+        }
+
+        #[test]
+        fn derive_domain_round_trips_through_evaluator() {
+            let condition =
+                lt(derived_order::qty(), Expr::<QtyT>::lit(Qty::new(d(10)))).into_inner();
+            let rule = RuleNode::RejectIf {
+                rule: RuleId::new("test.derived"),
+                condition,
+                reason: Reason::literal("derived"),
+            };
+            let ctx = DerivedCtx(DerivedOrder {
+                qty: Qty::new(d(5)),
+                side: Side::Buy,
+                price: Px::new(d(100)),
+            });
+            let decision = evaluate(&rule, &ctx).unwrap();
+            assert!(decision.is_deny());
+            assert_eq!(DerivedOrder::ENTITY_NAME, "derived_order");
+        }
+    }
+
     #[test]
     fn missing_field_yields_eval_error() {
         let rule = RuleNode::RejectIf {

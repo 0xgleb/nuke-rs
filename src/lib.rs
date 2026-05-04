@@ -11,6 +11,11 @@
 //! - [`subjects!`] — declares a reactor's subject list once and generates
 //!   the [`Subscribed`] and [`HasSubject`] impls.
 
+// Make `::nuke::*` paths in proc-macro-emitted code resolve when used
+// from within this crate (tests, examples that don't go through cargo
+// resolution by name). External users get this for free via cargo.
+extern crate self as nuke;
+
 pub mod domain;
 pub mod error;
 pub mod evm;
@@ -27,7 +32,7 @@ mod subscribed;
 
 pub use error::{Error, Result};
 pub use has_subject::HasSubject;
-pub use nuke_derive::EvmSubject;
+pub use nuke_derive::{Domain, EvmSubject};
 pub use one_of::{Fold, OneOf};
 pub use reactor::Reactor;
 pub use subject::Subject;
