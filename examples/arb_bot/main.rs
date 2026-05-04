@@ -15,6 +15,8 @@ use std::sync::Arc;
 use alloy_sol_types::sol;
 use nuke::evm::EvmWsSource;
 use nuke::prelude::*;
+use rust_decimal::Decimal;
+use rust_decimal::prelude::ToPrimitive;
 use tokio::sync::Mutex;
 
 secretspec_derive::declare_secrets!("secretspec.toml");
@@ -53,12 +55,13 @@ struct PoolState {
 impl PoolState {
     /// Marginal price of token1 priced in token0, expressed as the ratio
     /// `reserve0 / reserve1` (Uniswap V2 spot price). Returns `None`
-    /// before any `Sync` lands or if `reserve1 == 0`.
-    fn price_token1_in_token0(&self) -> Option<f64> {
+    /// before any `Sync` lands or if `reserve1 == 0`. Uses
+    /// `rust_decimal::Decimal` — never `f64` — for all financial math.
+    fn price_token1_in_token0(&self) -> Option<Decimal> {
         if self.reserve1 == 0 {
             None
         } else {
-            Some(self.reserve0 as f64 / self.reserve1 as f64)
+            Some(Decimal::from(self.reserve0) / Decimal::from(self.reserve1))
         }
     }
 }
@@ -180,8 +183,8 @@ fn check(
 ) -> Option<Opportunity> {
     let updated_price = just_updated.price_token1_in_token0()?;
     let other_price = other.price_token1_in_token0()?;
-    let edge = ((updated_price / other_price) - 1.0) * 10_000.0;
-    let edge_bps = edge.round() as i64;
+    let edge = ((updated_price / other_price) - Decimal::ONE) * Decimal::from(10_000);
+    let edge_bps = edge.round().to_i64().unwrap_or(i64::MAX);
     if edge_bps.abs() <= threshold_bps {
         return None;
     }

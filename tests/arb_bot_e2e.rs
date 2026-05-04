@@ -12,6 +12,8 @@ use alloy_primitives::{U256, address};
 use alloy_sol_types::{SolEvent, sol};
 use nuke::evm::EvmWsSource;
 use nuke::prelude::*;
+use rust_decimal::Decimal;
+use rust_decimal::prelude::ToPrimitive;
 use tokio::sync::{Mutex, mpsc};
 
 use common::{MockEthWsServer, MockLog, ScenarioPlan};
@@ -58,11 +60,11 @@ struct Reserves {
 }
 
 impl Reserves {
-    fn price(&self) -> Option<f64> {
+    fn price(&self) -> Option<Decimal> {
         if self.r1 == 0 {
             None
         } else {
-            Some(self.r0 as f64 / self.r1 as f64)
+            Some(Decimal::from(self.r0) / Decimal::from(self.r1))
         }
     }
 }
@@ -141,8 +143,8 @@ fn check(
 ) -> Option<Opportunity> {
     let updated_price = just_updated.price()?;
     let other_price = other.price()?;
-    let edge = ((updated_price / other_price) - 1.0).abs() * 10_000.0;
-    if edge.round() as i64 <= threshold_bps {
+    let edge = ((updated_price / other_price) - Decimal::ONE).abs() * Decimal::from(10_000);
+    if edge.round().to_i64().unwrap_or(0) <= threshold_bps {
         return None;
     }
     let (buy, sell) = if updated_price < other_price {
