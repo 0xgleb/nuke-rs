@@ -13,6 +13,7 @@
 pub mod ast;
 pub mod capability;
 mod decision;
+pub mod eval;
 mod reason;
 pub mod registry;
 
