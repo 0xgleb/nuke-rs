@@ -2906,6 +2906,7 @@ dependencies = [
  "async-trait",
  "futures-util",
  "nuke-derive",
+ "secrecy",
  "secretspec",
  "secretspec-derive",
  "serde",

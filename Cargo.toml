@@ -54,6 +54,7 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 # Secrets (consumed by the example, not by the library)
 secretspec = "0.8.2"
 secretspec-derive = "0.8.2"
+secrecy = "0.10.3"
 
 [dev-dependencies]
 tokio = { version = "1.41", features = ["full", "test-util"] }
