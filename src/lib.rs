@@ -14,6 +14,7 @@
 pub mod domain;
 pub mod error;
 pub mod evm;
+pub mod policy;
 pub mod tracing;
 
 mod apalis;
