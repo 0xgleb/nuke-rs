@@ -39,6 +39,7 @@ pub mod reexports {
     pub use alloy_primitives;
     pub use alloy_sol_types;
     pub use async_trait::async_trait;
+    pub use linkme;
 }
 
 /// Common imports for users of the framework.

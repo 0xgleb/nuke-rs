@@ -14,6 +14,7 @@ pub mod ast;
 pub mod capability;
 mod decision;
 mod reason;
+pub mod registry;
 
 pub use capability::{Capability, Context, HasInventory, HasMarketData, HasOrder, HasRiskLimits};
 

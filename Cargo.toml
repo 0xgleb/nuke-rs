@@ -63,6 +63,10 @@ alloy-sol-types = "1.5"
 # Domain primitives — Decimal everywhere, never f64 (see ROADMAP).
 rust_decimal = "1.41"
 
+# Rule registry: distributed-slice registration for compile-time enumeration
+# of every `RuleId` (CI uniqueness check + markdown coverage).
+linkme = "0.3.36"
+
 # Observability
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }

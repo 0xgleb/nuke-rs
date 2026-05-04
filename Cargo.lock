@@ -3004,6 +3004,7 @@ dependencies = [
  "apalis-workflow",
  "async-trait",
  "futures-util",
+ "linkme",
  "nuke-derive",
  "rust_decimal",
  "secrecy",
