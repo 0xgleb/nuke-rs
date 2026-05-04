@@ -1,11 +1,60 @@
 [package]
-name = "rust-nix"
+name = "nuke"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "A Tower-style, extensible framework for trading/crypto websocket communication. Reacts to market events and dispatches apalis jobs."
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+path = "src/lib.rs"
+
+[[example]]
+name = "arb_bot"
+path = "examples/arb_bot/main.rs"
 
 [dependencies]
-clap = { version = "4.6.1", features = ["derive", "env"] }
+nuke-derive = { path = "nuke-derive", version = "0.1.0" }
+
+# Type-level + async core
+async-trait = "0.1.83"
+thiserror = "2.0"
+futures-util = { version = "0.3", default-features = false, features = [
+  "std",
+  "sink",
+] }
+tokio = { version = "1.41", features = [
+  "macros",
+  "rt-multi-thread",
+  "sync",
+  "time",
+  "net",
+] }
+
+# WebSocket transport
+tokio-tungstenite = "0.29.0"
+
+# JSON-RPC framing
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Tower-style middleware (reserved for the EvmWsSource layer stack)
+tower = { version = "0.5.3", default-features = false, features = ["util"] }
+
+# Job execution
+apalis = { version = "=1.0.0-rc.7", default-features = false }
+
+# EVM types and ABI codegen (transport is nuke's own; alloy is for primitives + sol!)
+alloy-primitives = { version = "1.5", features = ["serde"] }
+alloy-sol-types = "1.5"
+
+# Observability
 tracing = "0.1.44"
-tracing-subscriber = "0.3.23"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+
+# Secrets (consumed by the example, not by the library)
+secretspec = "0.8.2"
+secretspec-derive = "0.8.2"
+
+[dev-dependencies]
+tokio = { version = "1.41", features = ["full", "test-util"] }
+trybuild = "1.0.116"
