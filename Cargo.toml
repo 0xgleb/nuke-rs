@@ -60,6 +60,9 @@ apalis-workflow = "=0.1.0-rc.7"
 alloy-primitives = { version = "1.5", features = ["serde"] }
 alloy-sol-types = "1.5"
 
+# Domain primitives — Decimal everywhere, never f64 (see ROADMAP).
+rust_decimal = "1.41"
+
 # Observability
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
@@ -72,4 +75,3 @@ secrecy = "0.10.3"
 [dev-dependencies]
 tokio = { version = "1.41", features = ["full", "test-util"] }
 trybuild = "1.0.116"
-rust_decimal = "1.41"

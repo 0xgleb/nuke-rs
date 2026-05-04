@@ -11,6 +11,7 @@
 //! - [`subjects!`] — declares a reactor's subject list once and generates
 //!   the [`Subscribed`] and [`HasSubject`] impls.
 
+pub mod domain;
 pub mod error;
 pub mod evm;
 pub mod tracing;
