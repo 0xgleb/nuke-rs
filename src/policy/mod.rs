@@ -10,8 +10,14 @@
 //!   `Deny`/`Escalate` so verdicts are self-explanatory and reproducible.
 //! - [`RuleId`] — interned `&'static str` rule identifier.
 
+pub mod ast;
 mod decision;
 mod reason;
 
+pub use ast::{
+    BinOp, BinOpExpr, BoolT, CmpExpr, CmpOp, Comparable, DecT, Expr, ExprType, FieldRef, InnerExpr,
+    LitValue, NotionalT, Numeric, PxT, QtyT, RuleNode, SideT, SymbolT, TextT, TypeTag, add, eq,
+    field, ge, gt, le, lt, ne, notional_div_px, qty_times_px, sub,
+};
 pub use decision::{Decision, EscalationTarget, RuleId};
-pub use reason::{Bindings, Reason, Slot, SlotName, SlotValue};
+pub use reason::{Bindings, Reason, ReasonChunk, ReasonTemplate, Slot, SlotName, SlotValue};
