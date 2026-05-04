@@ -11,8 +11,11 @@
 //! - [`RuleId`] — interned `&'static str` rule identifier.
 
 pub mod ast;
+pub mod capability;
 mod decision;
 mod reason;
+
+pub use capability::{Capability, Context, HasInventory, HasMarketData, HasOrder, HasRiskLimits};
 
 pub use ast::{
     BinOp, BinOpExpr, BoolT, CmpExpr, CmpOp, Comparable, DecT, Expr, ExprType, FieldRef, InnerExpr,
