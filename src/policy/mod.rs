@@ -14,6 +14,7 @@ pub mod ast;
 pub mod capability;
 mod decision;
 pub mod eval;
+mod macros;
 mod reason;
 pub mod registry;
 
