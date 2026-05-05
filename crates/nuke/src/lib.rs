@@ -27,6 +27,7 @@ extern crate self as nuke;
 pub mod apalis;
 pub mod domain;
 pub mod error;
+pub mod job;
 pub mod policy;
 pub mod tracing;
 
@@ -44,6 +45,7 @@ pub use apalis::{PipelineError, pump_through_apalis};
 pub use error::{Error, Result};
 pub use feed::{Feed, FeedStream};
 pub use has_subject::HasSubject;
+pub use job::{Job, Label, work};
 pub use ledger::Ledger;
 pub use nuke_derive::Domain;
 pub use one_of::{Fold, OneOf};

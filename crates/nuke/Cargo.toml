@@ -25,6 +25,7 @@ serde_json.workspace = true
 apalis.workspace = true
 apalis-core.workspace = true
 apalis-workflow.workspace = true
+backon.workspace = true
 
 # Domain primitives
 rust_decimal.workspace = true
