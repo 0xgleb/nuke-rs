@@ -77,7 +77,7 @@ that produces a typed `Source<EthLog>`.
 
 ### Layer 2 — Reactor + cqrs/es
 
-Events from sources flow into a cqrs/es event store (`nuke-persist`). Reactors
+Events from sources flow into a cqrs/es event store (`event-sorcery`). Reactors
 consume events (both directly streamed and replayed from the store) and
 **enqueue apalis jobs forming a DAG workflow**.
 
@@ -91,8 +91,7 @@ transient failures, and report status back through apalis's lifecycle.
 
 ### Layer 3 — Apalis Job DAG
 
-Every external-service interaction is a `Job<Ctx>`. The trait, modeled on
-[`~/code/st0x/st0x.liquidity/src/conductor/job.rs`](../README.md):
+Every external-service interaction is a `Job<Ctx>`:
 
 ```rust
 pub trait Job<Ctx>: Serialize + DeserializeOwned + Send + 'static
@@ -155,24 +154,9 @@ Captured in [`CLAUDE.md`](../CLAUDE.md). The big ones:
   (`Px`, `Qty`, `Notional`, ...).
 - No closures in the eDSL.
 - No venue specifics (`alloy`, exchange clients, etc.) in framework crates.
-  EVM/SVM/CEX live in `examples/*` and `adapters/*` only.
+  EVM/SVM/CEX live in adapter crates (e.g. `crates/evm/`) and `examples/*` only.
 - External-service side-effects only inside `Job<Ctx>` impls.
 - Apalis is internal — the public API stays in nuke vocab.
-
-## Comparison with peer frameworks
-
-- **`barter-rs`** (`~/code/0xgleb/barter-rs/`) — barter has `AlgoStrategy` →
-  `RiskManager` → execution. nuke-rs collapses Strategy + Risk into a single
-  declarative `policy!` block that compiles to a DAG. barter is more opinionated
-  about market data (the `Subscription`/`MarketStream` machinery); nuke-rs is
-  more opinionated about composition (cqrs/es + apalis DAGs).
-- **event-sorcery** (`~/code/st0x/st0x.liquidity/crates/event-sorcery/`) — the
-  pattern nuke's `nuke-persist` mirrors: rich-typed `EventSourced` trait +
-  internal `Lifecycle` adapter to cqrs-es. Same naming asymmetry
-  (`originate`/`evolve` event-side, `initialize`/`transition` command-side).
-- **conductor/job.rs** (`~/code/st0x/st0x.liquidity/src/conductor/job.rs`) — the
-  canonical `Job<Ctx>` pattern nuke's `nuke-job` mirrors. Generic
-  `work::<Ctx, J>` apalis handler with `backon` retries.
 
 ## Where this design comes from
 

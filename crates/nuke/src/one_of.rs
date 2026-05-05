@@ -1,6 +1,5 @@
 //! The discriminated union [`OneOf`] and its `.on(...).exhaustive()` chain.
 //!
-//! Lifted directly from event-sorcery's `dependency::OneOf` / `Fold`.
 //! `Never` as the tail makes exhaustiveness a compile-time check: the
 //! [`Fold::exhaustive`] method only exists when every union variant has
 //! been consumed by an `.on(...)` handler.

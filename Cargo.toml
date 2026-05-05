@@ -3,6 +3,7 @@ resolver = "3"
 members = [
   "crates/nuke",
   "crates/nuke-derive",
+  "crates/event-sorcery",
   "crates/evm",
   "crates/evm-derive",
   "examples/dex_arb",

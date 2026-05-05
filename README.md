@@ -40,8 +40,7 @@ Long form with diagrams in [docs/architecture.md](docs/architecture.md).
 ## Design
 
 Two user-facing traits + one declarative macro per layer, leaning hard on the
-type system to make wrong wirings into compile errors. Patterns mirrored from
-`event-sorcery` and `conductor/job.rs`.
+type system to make wrong wirings into compile errors.
 
 | Layer       | User writes                                        | Framework provides                                                       |
 | ----------- | -------------------------------------------------- | ------------------------------------------------------------------------ |
@@ -84,21 +83,6 @@ network, no secrets, no flakes.
 - [docs/architecture.md](docs/architecture.md) — long-form architecture
   reference with diagrams.
 - Per-crate `README.md` files document each workspace member's role.
-
-## Reference frameworks
-
-The user actively works with these and they directly inform nuke-rs design
-choices:
-
-- [event-sorcery](https://github.com/0xgleb/st0x.liquidity) — the
-  cqrs/es-on-cqrs-es adapter pattern.
-  `~/code/st0x/st0x.liquidity/crates/event-sorcery/`.
-- [conductor/job.rs](https://github.com/0xgleb/st0x.liquidity) — the canonical
-  `Job<Ctx>` trait pattern. `~/code/st0x/st0x.liquidity/src/conductor/job.rs`.
-- [barter-rs](https://github.com/barter-rs/barter-rs) — open-source Rust
-  framework for event-driven live-trading + backtesting. Borrowed: `Validator`,
-  `Processor<Event>`, typed `RiskApproved<T>` / `RiskRefused<T, Reason>`
-  wrappers. `~/code/0xgleb/barter-rs/`.
 
 ## Secrets
 

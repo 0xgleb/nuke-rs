@@ -1,14 +1,14 @@
-//! [`Lifecycle<E>`] — internal adapter that bridges nuke's
-//! [`EventSourced`] to cqrs-es's `Aggregate`. Users implement
-//! `EventSourced`; the blanket [`cqrs_es::Aggregate`] impl on
-//! `Lifecycle<E>` does the rest, routing commands by lifecycle state
-//! and surfacing every failure mode through [`LifecycleError`].
+//! [`Lifecycle<E>`] - internal adapter that bridges [`EventSourced`]
+//! to cqrs-es's `Aggregate`. Users implement `EventSourced`; the
+//! blanket [`cqrs_es::Aggregate`] impl on `Lifecycle<E>` does the
+//! rest, routing commands by lifecycle state and surfacing every
+//! failure mode through [`LifecycleError`].
 
 use async_trait::async_trait;
 use cqrs_es::{Aggregate, AggregateError, DomainEvent};
 use serde::{Deserialize, Serialize};
 
-use crate::persist::event_sourced::EventSourced;
+use crate::event_sourced::EventSourced;
 
 /// Lifecycle wrapper around a user's [`EventSourced`] entity.
 ///
@@ -144,7 +144,7 @@ impl<E: EventSourced> From<LifecycleError<E>> for AggregateError<LifecycleError<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::persist::event_sourced::EventSourced;
+    use crate::event_sourced::EventSourced;
     use serde::{Deserialize, Serialize};
 
     /// A minimal entity that exercises every code path in `Lifecycle`.
