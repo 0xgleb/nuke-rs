@@ -25,6 +25,8 @@
 use std::collections::BTreeMap;
 
 use apalis_core::backend::{BackendExt, codec::Codec};
+use apalis_core::error::BoxDynError;
+use apalis_core::task_fn::into_response::IntoResponse;
 use apalis_workflow::dag::decode::DagCodec;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -190,6 +192,38 @@ where
 
     fn decode(response: &B::Compact) -> Result<Self, Self::Error> {
         B::Codec::decode(response)
+    }
+}
+
+/// Pass-through `DagCodec` for the wire-side verdict tag. The verdict
+/// task in [`crate::policy::backends::dag`] emits this so downstream
+/// gating / routing nodes can act on the verdict.
+impl<B, Err> DagCodec<B> for crate::policy::DecisionTag
+where
+    B: BackendExt,
+    B::Codec: Codec<Self, Compact = B::Compact, Error = Err>,
+{
+    type Error = Err;
+
+    fn encode(self) -> Result<B::Compact, Self::Error> {
+        B::Codec::encode(&self)
+    }
+
+    fn decode(response: &B::Compact) -> Result<Self, Self::Error> {
+        B::Codec::decode(response)
+    }
+}
+
+/// Lets a `task_fn(...)` closure return `DecisionTag` directly. Apalis's
+/// `IntoResponse` is the bridge between a closure's return type and a
+/// `Service::Response`; the framework's primitives (`bool`, `i32`,
+/// ...) ship with built-in impls, but adopter-defined types like
+/// `DecisionTag` need an explicit one.
+impl IntoResponse for crate::policy::DecisionTag {
+    type Output = Self;
+
+    fn into_response(self) -> Result<Self, BoxDynError> {
+        Ok(self)
     }
 }
 

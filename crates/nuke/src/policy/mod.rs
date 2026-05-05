@@ -28,5 +28,5 @@ pub use ast::{
     InnerExpr, LitValue, NotionalT, Numeric, PxT, QtyT, RuleNode, SideT, SymbolT, TextT, TypeTag,
     add, eq, field, ge, gt, if_else, le, lt, ne, notional_div_px, qty_times_px, sub,
 };
-pub use decision::{Decision, EscalationTarget, RuleId};
+pub use decision::{Decision, DecisionTag, EscalationTarget, RuleId};
 pub use reason::{Bindings, Reason, ReasonChunk, ReasonTemplate, Slot, SlotName, SlotValue};
