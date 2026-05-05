@@ -1,5 +1,5 @@
 //! The [`Reactor`] trait - what reacts to events from a list of
-//! subjects by *enqueuing jobs* (which apalis runs durably with
+//! deps by *enqueuing jobs* (which apalis runs durably with
 //! retries).
 //!
 //! Reactors are pure deciders. They observe events and decide what
@@ -8,21 +8,20 @@
 //! `TradingVenue::place_trade` / etc.) happen inside [`Job`] impls so
 //! durability + retries + backoff are free.
 //!
-//! The event type is *computed* from `Subscribed::Subjects`, not
-//! declared by hand. Implement `react` with the
-//! `.on(...).on(...).exhaustive()` chain - forgetting a subject is a
-//! compile error.
+//! The event type is *computed* from `Dependent::Deps`, not declared
+//! by hand. Implement `react` with the `.on(...).on(...).exhaustive()`
+//! chain - forgetting a dep is a compile error.
 
 use async_trait::async_trait;
 use std::sync::Arc;
 
 use crate::job::Job;
-use crate::subscribed::{SubjectList, Subscribed};
+use crate::subscribed::{DepList, Dependent};
 
 /// Event reactor with exhaustive compile-time-checked handling.
 ///
 /// ```ignore
-/// subjects!(ArbBot, [UniV2WethUsdc, SushiV2WethUsdc]);
+/// deps!(ArbBot, [UniV2WethUsdc, SushiV2WethUsdc]);
 ///
 /// #[async_trait]
 /// impl Reactor for ArbBot {
@@ -31,7 +30,7 @@ use crate::subscribed::{SubjectList, Subscribed};
 ///
 ///     async fn react(
 ///         &self,
-///         event: <Self::Subjects as SubjectList>::Event,
+///         event: <Self::Deps as DepList>::Event,
 ///     ) -> Vec<ArbJob> {
 ///         event
 ///             .on(|id, sync| async move { self.on_univ2(id, sync).await })
@@ -42,7 +41,7 @@ use crate::subscribed::{SubjectList, Subscribed};
 /// }
 /// ```
 #[async_trait]
-pub trait Reactor: Subscribed + Send + Sync {
+pub trait Reactor: Dependent + Send + Sync {
     /// The job type emitted by this reactor's `react`. Usually an
     /// enum of every job variant the reactor produces; `Job<Ctx>` is
     /// implemented on the enum and dispatches to per-variant
@@ -58,7 +57,7 @@ pub trait Reactor: Subscribed + Send + Sync {
     /// Decide which jobs to enqueue in response to `event`. May
     /// return zero or more. Reactors do not perform work directly;
     /// `Job::perform` does.
-    async fn react(&self, event: <Self::Subjects as SubjectList>::Event) -> Vec<Self::Job>;
+    async fn react(&self, event: <Self::Deps as DepList>::Event) -> Vec<Self::Job>;
 }
 
 #[async_trait]
@@ -69,7 +68,7 @@ where
     type Job = R::Job;
     type Ctx = R::Ctx;
 
-    async fn react(&self, event: <Self::Subjects as SubjectList>::Event) -> Vec<Self::Job> {
+    async fn react(&self, event: <Self::Deps as DepList>::Event) -> Vec<Self::Job> {
         R::react(self, event).await
     }
 }

@@ -1,68 +1,71 @@
-//! The [`subjects!`] declarative macro and its `register_subjects!`
+//! The [`deps!`] declarative macro and its `register_deps!`
 //! helper.
 //!
 //! Two forms, distinguished by syntax:
 //!
-//! - **Type-position** `subjects![A, B, C]` expands to a nested
+//! - **Type-position** `deps![A, B, C]` expands to a nested
 //!   `Cons<A, Cons<B, Cons<C, Nil>>>` type.
-//! - **Statement-position** `subjects!(Reactor, [A, B, C])` generates
-//!   `impl Subscribed for Reactor` and `HasSubject<X>` impls for each
-//!   subject — written once, no duplication.
+//! - **Statement-position** `deps!(Reactor, [A, B, C])` generates
+//!   `impl Dependent for Reactor` and `HasDep<X>` impls for each
+//!   dep - written once, no duplication.
+//!
+//! Naming mirrors event-sorcery's `deps!` so reactor declarations read
+//! the same way regardless of whether the dep is an external stream or
+//! an internal aggregate.
 
-/// Build a type-level subject list from subject types.
+/// Build a type-level dep list from dep types.
 #[macro_export]
-macro_rules! subjects {
-    // Statement-position: generate Subscribed + HasSubject impls.
-    ($reactor:ty, [$($subject:ty),+ $(,)?]) => {
-        impl $crate::Subscribed for $reactor {
-            type Subjects = $crate::subjects![$($subject),+];
+macro_rules! deps {
+    // Statement-position: generate Dependent + HasDep impls.
+    ($reactor:ty, [$($dep:ty),+ $(,)?]) => {
+        impl $crate::Dependent for $reactor {
+            type Deps = $crate::deps![$($dep),+];
         }
-        $crate::register_subjects!($($subject),+);
+        $crate::register_deps!($($dep),+);
     };
 
     // Type-position: expand to Cons chain.
     () => { $crate::Nil };
     ($head:ty $(, $tail:ty)* $(,)?) => {
-        $crate::Cons<$head, $crate::subjects![$($tail),*]>
+        $crate::Cons<$head, $crate::deps![$($tail),*]>
     };
 }
 
-/// Generate [`HasSubject`](crate::HasSubject) impls for each subject in
-/// a list.
+/// Generate [`HasDep`](crate::HasDep) impls for each dep in a list.
 ///
 /// Low-level building block used by the statement-position form of
-/// [`subjects!`]. Prefer [`subjects!`] directly.
+/// [`deps!`]. Prefer [`deps!`] directly.
 #[macro_export]
-macro_rules! register_subjects {
-    // Single subject: blanket `HasSubject<S> for Cons<S, Nil>` covers it.
+macro_rules! register_deps {
+    // Single dep: blanket `HasDep<D> for Cons<D, Nil>` covers it.
     ($single:ty) => {};
 
-    // Multiple subjects: walk the list and generate one impl per subject.
-    ($($subject:ty),+ $(,)?) => {
-        $crate::register_subjects!(@impls [$($subject),+] [$($subject),+] []);
+    // Multiple deps: walk the list and generate one impl per dep.
+    ($($dep:ty),+ $(,)?) => {
+        $crate::register_deps!(@impls [$($dep),+] [$($dep),+] []);
     };
 
-    // All subjects processed.
+    // All deps processed.
     (@impls [] [$($all:ty),+] [$($done:ty),*]) => {};
 
-    // Generate HasSubject for the current subject, then recurse.
+    // Generate HasDep for the current dep, then recurse.
     (@impls [$current:ty $(, $rest:ty)*] [$($all:ty),+] [$($done:ty),*]) => {
-        impl $crate::HasSubject<$current> for $crate::subjects![$($all),+] {
+        impl $crate::HasDep<$current> for $crate::deps![$($all),+] {
             fn inject(
                 id: <$current as $crate::Subject>::Id,
                 event: <$current as $crate::Subject>::Event,
-            ) -> <Self as $crate::SubjectList>::Event {
-                $crate::register_subjects!(@wrap [$($done),*] $crate::OneOf::Here((id, event)))
+            ) -> <Self as $crate::DepList>::Event {
+                $crate::register_deps!(@wrap [$($done),*] $crate::OneOf::Here((id, event)))
             }
         }
-        $crate::register_subjects!(@impls [$($rest),*] [$($all),+] [$($done,)* $current]);
+        $crate::register_deps!(@impls [$($rest),*] [$($all),+] [$($done,)* $current]);
     };
 
-    // No wrapping needed (subject is at head).
+    // No wrapping needed (dep is at head).
     (@wrap [] $expr:expr) => { $expr };
 
-    // Wrap in OneOf::There once per subject preceding `current`.
+    // Wrap in OneOf::There once per dep preceding `current`.
     (@wrap [$_head:ty $(, $rest:ty)*] $expr:expr) => {
-        $crate::OneOf::There($crate::register_subjects!(@wrap [$($rest),*] $expr))
+        $crate::OneOf::There($crate::register_deps!(@wrap [$($rest),*] $expr))
     };
 }

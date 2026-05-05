@@ -54,7 +54,7 @@ pub struct UniV2WethUsdc;
 )]
 pub struct SushiV2WethUsdc;
 
-subjects!(ArbBot, [UniV2WethUsdc, SushiV2WethUsdc]);
+deps!(ArbBot, [UniV2WethUsdc, SushiV2WethUsdc]);
 
 /// State shared across the two pool handlers - the latest `(reserve0,
 /// reserve1)` per pool. `None` means we haven't seen a `Sync` yet.
@@ -186,7 +186,7 @@ impl Reactor for ArbBot {
     type Job = ArbJob;
     type Ctx = ArbCtx;
 
-    async fn react(&self, event: <Self::Subjects as SubjectList>::Event) -> Vec<Self::Job> {
+    async fn react(&self, event: <Self::Deps as DepList>::Event) -> Vec<Self::Job> {
         event
             .on(|id, sync| async move { self.on_univ2(id, sync).await })
             .on(|id, sync| async move { self.on_sushi(id, sync).await })
@@ -287,7 +287,7 @@ mod e2e {
     )]
     struct PoolB;
 
-    subjects!(TestBot, [PoolA, PoolB]);
+    deps!(TestBot, [PoolA, PoolB]);
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
     enum Side {
@@ -396,7 +396,7 @@ mod e2e {
         type Job = TestJob;
         type Ctx = TestCtx;
 
-        async fn react(&self, event: <Self::Subjects as SubjectList>::Event) -> Vec<Self::Job> {
+        async fn react(&self, event: <Self::Deps as DepList>::Event) -> Vec<Self::Job> {
             event
                 .on(|id, sync| async move { self.on_a(id, sync).await })
                 .on(|id, sync| async move { self.on_b(id, sync).await })
