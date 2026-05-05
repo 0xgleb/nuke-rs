@@ -1,8 +1,8 @@
-//! Coverage / drift telemetry — counts how often each leaf in a
+//! Coverage / drift telemetry - counts how often each leaf in a
 //! `RuleNode` fires in production.
 //!
-//! Surfaces dead rules (zero hits over a window → a candidate for
-//! removal) and regime changes (a rule that used to fire 100×/day
+//! Surfaces dead rules (zero hits over a window -> a candidate for
+//! removal) and regime changes (a rule that used to fire 100x/day
 //! suddenly going quiet means market behaviour shifted, not that the
 //! code is broken). Backends emit metrics; this module just keeps the
 //! per-`RuleId` counters and exposes a snapshot.
@@ -61,7 +61,7 @@ pub fn snapshot() -> BTreeMap<RuleId, RuleCounters> {
         .clone()
 }
 
-/// Reset every counter — primarily for tests.
+/// Reset every counter - primarily for tests.
 pub fn reset() {
     COUNTERS
         .lock()

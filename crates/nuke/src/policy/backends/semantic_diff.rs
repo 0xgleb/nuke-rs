@@ -1,9 +1,9 @@
 //! Semantic diff over `RuleNode`. Classifies a change between two
-//! revisions of a rule as `Identical`, `Narrowed` (more conditions →
-//! denies more strictly), `Widened` (fewer conditions → allows more),
+//! revisions of a rule as `Identical`, `Narrowed` (more conditions ->
+//! denies more strictly), `Widened` (fewer conditions -> allows more),
 //! or `Unrelated` (structural change beyond either).
 //!
-//! Better than `git diff` for review of policy changes — text-level
+//! Better than `git diff` for review of policy changes - text-level
 //! diffs can't tell whether a refactor preserved meaning, and they
 //! highlight whitespace-only churn the same as material changes.
 
@@ -13,7 +13,7 @@ use crate::policy::backends::wire::schema_hash;
 /// Outcome of comparing two `RuleNode` revisions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Diff {
-    /// Same hash → byte-identical AST.
+    /// Same hash -> byte-identical AST.
     Identical,
     /// `after` requires *more* conditions to deny / accept than `before`.
     /// Strictly fewer inputs deny than before.
@@ -21,7 +21,7 @@ pub enum Diff {
     /// `after` requires *fewer* conditions / has *more* deny paths than
     /// `before`. Strictly more inputs deny than before.
     Widened,
-    /// Structural change beyond a simple narrow/widen — needs human
+    /// Structural change beyond a simple narrow/widen - needs human
     /// review.
     Unrelated,
 }
@@ -125,7 +125,7 @@ mod tests {
         let double = Expr::<BoolT>::and(vec![Expr::<BoolT>::lit(true), Expr::<BoolT>::lit(true)]);
         let before = reject_if(single.into_inner());
         let after = reject_if(double.into_inner());
-        // More expressions → narrower rule.
+        // More expressions -> narrower rule.
         assert_eq!(diff(&before, &after), Diff::Narrowed);
     }
 }

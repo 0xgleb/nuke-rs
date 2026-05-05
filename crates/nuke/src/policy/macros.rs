@@ -1,9 +1,9 @@
 //! Declarative writing surface for the eDSL.
 //!
 //! Every macro here desugars to constructors over the typed AST in
-//! [`crate::policy::ast`]. The fixed grammar — `reject_when!`,
+//! [`crate::policy::ast`]. The fixed grammar - `reject_when!`,
 //! `escalate_when!`, `all_of!`, `any_of!`, `given!`, `bind_as!`,
-//! `define_rule!` — is the syntactic firewall against free-form Rust
+//! `define_rule!` - is the syntactic firewall against free-form Rust
 //! blocks: the `condition` slot must implement `into_inner()` (i.e. be
 //! a typed `Expr<BoolT>`), so a stray closure or arbitrary `if`
 //! expression won't even compile.

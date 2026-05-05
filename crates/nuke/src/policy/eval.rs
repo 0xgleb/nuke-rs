@@ -1,13 +1,13 @@
 //! Runtime evaluator: walks a [`RuleNode`] against a typed
 //! [`Context`] and produces a [`Decision`].
 //!
-//! The first eDSL backend. Every other backend (markdown, SMT, SQL, …)
+//! The first eDSL backend. Every other backend (markdown, SMT, SQL, ...)
 //! folds over the same AST; the evaluator is just the fold that
 //! produces a verdict instead of a document. Bindings are captured as
 //! the walk progresses so a `Deny`/`Escalate` carries the actual
 //! values that produced the verdict.
 //!
-//! No type-level magic at this layer — by the time we get here the AST
+//! No type-level magic at this layer - by the time we get here the AST
 //! is already type-erased ([`InnerExpr`]), so the evaluator just does a
 //! recursive switch on variants. Type safety happened at construction
 //! time in [`crate::policy::ast`].
@@ -22,10 +22,7 @@ use crate::policy::decision::Decision;
 use crate::policy::reason::{Bindings, SlotValue};
 
 /// Errors the evaluator can produce. Most of these are "the rule
-/// references something the context doesn't provide" — once the
-/// capability machinery is wired through `derive(Domain)` and the
-/// `policy!` macro, the type system will rule these out and the
-/// evaluator can `unwrap()` instead. Until then they're real.
+/// references something the context doesn't provide".
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum EvalError {
     #[error("missing field: {entity}.{name}")]
@@ -97,7 +94,7 @@ fn eval_rule<C: Context>(
         }
         RuleNode::All(rules) | RuleNode::Any(rules) => {
             // Both `All` and `Any` short-circuit on the first non-Allow
-            // verdict — rules within either combinator are sequenced for
+            // verdict - rules within either combinator are sequenced for
             // deterministic ordering, and nothing in v0 distinguishes
             // them. The names exist so the markdown and SMT backends
             // can still differentiate the author's intent.
@@ -432,7 +429,7 @@ mod tests {
         }
     }
 
-    /// End-to-end exercise of `#[derive(Domain)]` — generated module
+    /// End-to-end exercise of `#[derive(Domain)]` - generated module
     /// `derived_order` exposes typed accessors and `Order::read_field`
     /// drives the `Context` impl below.
     mod derive_domain_smoke {

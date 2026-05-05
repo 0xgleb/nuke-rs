@@ -1,4 +1,4 @@
-//! TLA+ export — emits a TLA+ snippet for the rule's deny condition.
+//! TLA+ export - emits a TLA+ snippet for the rule's deny condition.
 //! Used when a policy participates in a larger order-lifecycle state
 //! machine and you want the combined model checked.
 //!

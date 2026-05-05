@@ -1,4 +1,4 @@
-//! SQL backtest backend — compiles a `RuleNode`'s deny condition into
+//! SQL backtest backend - compiles a `RuleNode`'s deny condition into
 //! a SQL `WHERE` clause. Run against historical flow to measure
 //! hit-rate and trader impact before deploying a rule.
 //!

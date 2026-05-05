@@ -1,4 +1,4 @@
-//! CBOR wire format + schema hash. Used for post-trade audits — every
+//! CBOR wire format + schema hash. Used for post-trade audits - every
 //! deployed rule is encoded once, hashed, and the hash is recorded
 //! alongside the verdict; later, the audit replays the exact rule
 //! that ran. Also enables hot-reload by shipping just the encoded
@@ -42,7 +42,7 @@ pub fn encode<T: Serialize>(rule: &T) -> Result<WireRule, ciborium::ser::Error<s
     })
 }
 
-/// Encode just to bytes — useful when you only need the bytes (e.g.
+/// Encode just to bytes - useful when you only need the bytes (e.g.
 /// for a custom hash or alternative storage).
 pub fn encode_bytes<T: Serialize>(
     rule: &T,

@@ -1,4 +1,4 @@
-//! [`Reason`] — typed format-string AST and [`Bindings`] — captured
+//! [`Reason`] - typed format-string AST and [`Bindings`] - captured
 //! evaluation values.
 //!
 //! Stored separately from a flat `String` so every backend (markdown
@@ -16,7 +16,7 @@ use crate::domain::{Notional, Px, Qty, Side, Symbol};
 ///
 /// Either a flat literal (`"order rejected"`) or a templated message
 /// with named slots (`"order qty {requested} exceeds limit {limit}"`).
-/// Backends choose how to render — markdown can interpolate, CBOR
+/// Backends choose how to render - markdown can interpolate, CBOR
 /// preserves both template and slot values, semantic diff compares
 /// templates structurally.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -67,7 +67,7 @@ impl Reason {
 /// captured at evaluation time."
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum ReasonTemplate {
-    /// No interpolation — the message is exactly the literal text.
+    /// No interpolation - the message is exactly the literal text.
     Literal(&'static str),
     /// Sequence of literal chunks and named slots.
     ///
@@ -106,7 +106,7 @@ impl std::fmt::Display for SlotName {
 
 /// Typed value that can fill a [`Slot`].
 ///
-/// One variant per supported domain type — extending the universe of
+/// One variant per supported domain type - extending the universe of
 /// slot values is intentionally a deliberate change here, not free-form
 /// `String` interpolation. New variants must be added when new domain
 /// primitives appear.
@@ -142,7 +142,7 @@ impl std::fmt::Display for SlotValue {
 /// Keyed by [`SlotName`] so a [`Reason`] template's slots can be
 /// resolved against the actual values, and so backends (markdown,
 /// telemetry, CBOR audit) can render a complete record of *why* a rule
-/// reached its decision — not just what it returned.
+/// reached its decision - not just what it returned.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Bindings {
     entries: Vec<(SlotName, SlotValue)>,

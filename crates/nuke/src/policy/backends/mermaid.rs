@@ -1,4 +1,4 @@
-//! Mermaid backend -emits a flowchart of a `RuleNode` for visual
+//! Mermaid backend - emits a flowchart of a `RuleNode` for visual
 //! review. Helps catch dead branches and surface the rule's overall
 //! shape at a glance.
 

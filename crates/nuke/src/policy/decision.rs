@@ -1,4 +1,4 @@
-//! [`Decision`] — the total verdict algebra returned by every rule
+//! [`Decision`] - the total verdict algebra returned by every rule
 //! evaluation.
 //!
 //! Three variants and only three: `Allow`, `Deny`, `Escalate`. Verdict
@@ -53,16 +53,16 @@ impl Decision {
 /// Stable identifier for a rule. Interned `&'static str` so equality is
 /// pointer-cheap and IDs never invalidate.
 ///
-/// IDs are registered at startup via the rule registry (lands with the
-/// `policy!` macro epic). Creating a `RuleId` directly bypasses that
-/// registry — only do it from generated code.
+/// IDs are registered at startup via the rule registry. Creating a
+/// `RuleId` directly bypasses that registry - only do it from generated
+/// code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
 pub struct RuleId(&'static str);
 
 impl RuleId {
     /// Construct a `RuleId` from a `&'static str`. Intended for
     /// macro-generated callers; hand-written usage should pre-register
-    /// through the rule registry once it lands.
+    /// through the rule registry.
     pub const fn new(name: &'static str) -> Self {
         Self(name)
     }
@@ -80,7 +80,7 @@ impl std::fmt::Display for RuleId {
 
 /// Where an `Escalate` decision should be routed (e.g. `"compliance"`,
 /// `"risk-desk"`, `"manual-review"`). Backends decide what to do with
-/// the target — the rule itself just names it.
+/// the target - the rule itself just names it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub struct EscalationTarget(&'static str);
 

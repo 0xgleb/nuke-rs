@@ -1,12 +1,9 @@
-//! Proptest scaffolding backend — derives a structural test plan from
+//! Proptest scaffolding backend - derives a structural test plan from
 //! a `RuleNode`. Coverage is structural (one generated test per leaf
 //! branch), not line-based.
 //!
-//! V0 emits a [`TestPlan`] describing the branches that need
-//! exercising; the actual proptest strategies require domain-typed
-//! generators which arrive once `derive(Domain)` propagates field
-//! type info into this layer. Until then, the plan tells you *which*
-//! branches you need property tests for.
+//! Emits a [`TestPlan`] describing the branches that need exercising;
+//! the plan tells you *which* branches need property tests.
 
 use crate::policy::ast::{InnerExpr, RuleNode};
 use crate::policy::decision::RuleId;
@@ -82,7 +79,7 @@ fn render_condition(expr: &InnerExpr) -> String {
     .lines()
     .next()
     .and_then(|line| line.split_once("when `"))
-    .and_then(|(_, rest)| rest.split_once("` —"))
+    .and_then(|(_, rest)| rest.split_once("` -"))
     .map_or_else(|| "<expr>".into(), |(left, _)| left.to_owned())
 }
 

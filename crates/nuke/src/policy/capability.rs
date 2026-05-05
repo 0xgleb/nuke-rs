@@ -16,9 +16,7 @@
 //! `FieldRef { entity, name }`) to the typed context happens through
 //! [`Context::lookup`]. Each capability is a *promise* that
 //! `lookup(its_entity, its_field)` will return `Some(...)` for any
-//! field registered against that entity. The `derive(Domain)` proc-macro
-//! (lands with task #19) will generate the per-entity match arms so
-//! contexts don't write the `lookup` plumbing by hand.
+//! field registered against that entity.
 
 use crate::policy::reason::SlotValue;
 
@@ -28,7 +26,7 @@ use crate::policy::reason::SlotValue;
 /// which `(entity, name)` pairs will succeed.
 pub trait Context {
     /// Resolve a field reference to a [`SlotValue`]. `None` means the
-    /// field isn't provided by this context — a capability bound on
+    /// field isn't provided by this context - a capability bound on
     /// the call site should make `None` unreachable for fields the
     /// rule actually requires.
     fn lookup(&self, entity: &str, name: &str) -> Option<SlotValue>;
@@ -97,10 +95,7 @@ mod tests {
     impl HasOrder for TestCtx {}
 
     /// Compile-time witness that a rule requiring `HasOrder` accepts
-    /// any context that impls it. If you remove `HasOrder` from the
-    /// bound it still compiles (since we don't actually call ctx in
-    /// this synthetic test); the real compile-time check arrives via
-    /// `trybuild` once the runtime evaluator lands.
+    /// any context that impls it.
     fn requires_order<C: HasOrder>(_ctx: &C) {}
 
     #[test]
