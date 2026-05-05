@@ -37,5 +37,17 @@ jobs:
     # `nix flake check` (which evaluates devenv's `--impure`-only
     # devShell) and lets each crane derivation cache independently in
     # the nix binary cache.
+    #
+    # No `--print-build-logs`: that flag streams every compile line,
+    # which buries the actual error when something fails. Without it
+    # Nix stays quiet on success and surfaces just the failed
+    # derivation's stderr tail on failure.
     - name: "build check: ${{ matrix.check }}"
-      run: nix build --accept-flake-config --print-build-logs ".#checks.x86_64-linux.${{ matrix.check }}"
+      run: nix build --accept-flake-config ".#checks.x86_64-linux.${{ matrix.check }}"
+
+    # On failure, surface the failed derivation's stderr in full so
+    # the GitHub Actions log includes the cargo error context that
+    # `nix build`'s tail summary truncates.
+    - name: "show full log on failure"
+      if: failure()
+      run: nix log ".#checks.x86_64-linux.${{ matrix.check }}" || true
