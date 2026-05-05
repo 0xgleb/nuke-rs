@@ -2,16 +2,16 @@
 //!
 //! Initial encoding (NOT tagless-final). Two layers:
 //!
-//! - **`Expr<T>`** — polymorphic typed expression node. The phantom `T`
+//! - **`Expr<T>`** - polymorphic typed expression node. The phantom `T`
 //!   carries the value type for compile-time type-checking; the inner
 //!   [`InnerExpr`] enum is uniformly enumerated so backends can walk it
 //!   without generics.
-//! - **`RuleNode`** — control flow over predicates: `Given`, `RejectIf`,
+//! - **`RuleNode`** - control flow over predicates: `Given`, `RejectIf`,
 //!   `EscalateIf`, `All`, `Any`, `Bind`. The leaves point at typed
 //!   `Expr<Bool>` predicates and structured `Reason`s.
 //!
 //! No closures anywhere. Every comparison, arithmetic op, field access,
-//! and combinator is a named AST variant — that's the whole point. A
+//! and combinator is a named AST variant - that's the whole point. A
 //! rule containing a `Fn` cannot be rendered, proved, diffed, or
 //! compiled to SQL, which destroys the multi-backend story.
 
@@ -22,6 +22,7 @@ use rust_decimal::Decimal;
 use serde::Serialize;
 
 use crate::domain::{Notional, Px, Qty, Side, Symbol};
+use crate::job::Label;
 use crate::policy::decision::{EscalationTarget, RuleId};
 use crate::policy::reason::{Reason, SlotName};
 
@@ -32,7 +33,7 @@ use crate::policy::reason::{Reason, SlotName};
 /// A typed expression that yields a value of type `T` at evaluation time.
 ///
 /// `T` is a *type-level tag* (zero-sized marker), not the runtime value
-/// type — the inner [`InnerExpr`] is type-erased so backends fold over a
+/// type - the inner [`InnerExpr`] is type-erased so backends fold over a
 /// uniform tree without monomorphizing per `T`. The phantom `T` exists
 /// solely to make the *constructors* type-safe: you can't pass a
 /// `Expr<BoolT>` where a `Expr<DecT>` is required.
@@ -200,8 +201,7 @@ impl Expr<TextT> {
 
 /// Read a registered field from the evaluation context. The `T` tag
 /// must match the field's registered type, but at this layer we trust
-/// the callsite — `derive(Domain)` will generate typed accessors that
-/// build this with the right `T` automatically.
+/// the callsite to pass the right `T`.
 pub fn field<T: ExprType>(entity: &'static str, name: &'static str) -> Expr<T> {
     Expr::from_inner(InnerExpr::Field(FieldRef { entity, name }))
 }
@@ -238,8 +238,7 @@ pub fn ge<T: Comparable>(lhs: Expr<T>, rhs: Expr<T>) -> Expr<BoolT> {
 }
 
 /// Same-type addition over [`Numeric`] tags. `Px + Px` is allowed at
-/// the AST level; the `policy!` macro layer can refuse semantically
-/// odd combinations later.
+/// the AST level.
 pub fn add<T: Numeric>(lhs: Expr<T>, rhs: Expr<T>) -> Expr<T> {
     bin_op_same(BinOp::Add, lhs, rhs)
 }
@@ -386,6 +385,38 @@ pub enum RuleNode {
         expr: InnerExpr,
         then: Box<RuleNode>,
     },
+    /// Side-effect point: queue an action (a [`crate::Job`]) to be
+    /// executed if the rule reaches this leaf without `Deny` or
+    /// `Escalate`. The DAG compiler maps each `Run` to one apalis
+    /// node downstream of any predicate gates that lead to it; the
+    /// runtime evaluator accumulates them into the [`Outcome`] it
+    /// returns. The action's payload is built from previously-`Bind`ed
+    /// slots named in `captures` - keeping side effects in the AST
+    /// (rather than as Rust closures the caller passes alongside) is
+    /// what lets the SMT / SQL / mermaid / etc. backends reason about
+    /// what a policy *does*, not just what it permits.
+    ///
+    /// [`Outcome`]: crate::policy::Outcome
+    Run(ActionSpec),
+}
+
+/// A side-effect action to enqueue when an [`RuleNode::Run`] node is
+/// reached.
+///
+/// `label` names the [`crate::Job`] to invoke; `captures` lists the
+/// bound slots (from prior [`RuleNode::Bind`]s) that should travel
+/// with the action as its payload. Static metadata only - no
+/// closures, so every backend can render or analyze the action.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ActionSpec {
+    pub label: Label,
+    pub captures: Vec<SlotName>,
+}
+
+impl ActionSpec {
+    pub fn new(label: Label, captures: Vec<SlotName>) -> Self {
+        Self { label, captures }
+    }
 }
 
 // ---------------------------------------------------------------------

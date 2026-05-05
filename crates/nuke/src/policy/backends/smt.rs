@@ -1,9 +1,9 @@
-//! SMT-LIB backend — emits a `(declare-const ...)` + `(assert ...)`
+//! SMT-LIB backend - emits a `(declare-const ...)` + `(assert ...)`
 //! script for Z3/CVC5. Used by CI for totality (every input lands
 //! somewhere) and non-subsumption (no rule fully shadowed by another)
 //! proofs.
 //!
-//! V0 emits SMT-LIB v2 text only — no native Z3 binding. The CI script
+//! V0 emits SMT-LIB v2 text only - no native Z3 binding. The CI script
 //! shells out to `z3 -in` (or `cvc5 --lang smt2`) and feeds the output
 //! of [`render_assert`].
 
@@ -14,7 +14,7 @@ use crate::policy::ast::{
     BinOp, BinOpExpr, CmpExpr, CmpOp, FieldRef, InnerExpr, LitValue, RuleNode,
 };
 
-/// Emit the SMT-LIB script that asserts the rule's "deny condition" —
+/// Emit the SMT-LIB script that asserts the rule's "deny condition" -
 /// useful for proving that two rules can't both fire on the same input
 /// (non-subsumption).
 pub fn render_assert(rule: &RuleNode) -> String {
@@ -56,6 +56,9 @@ fn collect_decls(rule: &RuleNode, into: &mut BTreeSet<String>) {
             collect_expr_decls(expr, into);
             collect_decls(then, into);
         }
+        // `Run` references slots already declared by upstream `Bind`s
+        // and contributes no new field declarations of its own.
+        RuleNode::Run(_) => {}
     }
 }
 
@@ -111,6 +114,10 @@ fn rule_to_smt(rule: &RuleNode) -> String {
             )
         }
         RuleNode::Bind { then, .. } => rule_to_smt(then),
+        // `Run` is not a constraint - the SMT proposition for an
+        // action node is "true" (this branch is satisfiable iff its
+        // upstream gates are).
+        RuleNode::Run(_) => "true".to_string(),
     }
 }
 

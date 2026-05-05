@@ -53,8 +53,9 @@ where
 }
 
 /// Human-readable identifier for an enqueued job. Used in structured
-/// logging.
-#[derive(Debug, Clone)]
+/// logging and as a stable key in policy [`crate::policy::ast::ActionSpec`]
+/// references.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct Label(String);
 
 impl Label {

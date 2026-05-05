@@ -1,9 +1,9 @@
 //! Declarative writing surface for the eDSL.
 //!
 //! Every macro here desugars to constructors over the typed AST in
-//! [`crate::policy::ast`]. The fixed grammar — `reject_when!`,
+//! [`crate::policy::ast`]. The fixed grammar - `reject_when!`,
 //! `escalate_when!`, `all_of!`, `any_of!`, `given!`, `bind_as!`,
-//! `define_rule!` — is the syntactic firewall against free-form Rust
+//! `define_rule!` - is the syntactic firewall against free-form Rust
 //! blocks: the `condition` slot must implement `into_inner()` (i.e. be
 //! a typed `Expr<BoolT>`), so a stray closure or arbitrary `if`
 //! expression won't even compile.
@@ -93,6 +93,26 @@ macro_rules! bind_as {
     };
 }
 
+/// Build a [`RuleNode::Run`](crate::policy::ast::RuleNode::Run) - a
+/// side-effect leaf that queues the named [`crate::Job`] when reached
+/// without short-circuit. Optionally captures the listed slots into
+/// the action's payload.
+#[macro_export]
+macro_rules! run {
+    ( $label:literal $(,)? ) => {
+        $crate::policy::ast::RuleNode::Run($crate::policy::ast::ActionSpec::new(
+            $crate::Label::new($label),
+            ::std::vec::Vec::new(),
+        ))
+    };
+    ( $label:literal, with [ $($slot:literal),+ $(,)? ] $(,)? ) => {
+        $crate::policy::ast::RuleNode::Run($crate::policy::ast::ActionSpec::new(
+            $crate::Label::new($label),
+            ::std::vec![$($crate::policy::SlotName($slot)),+],
+        ))
+    };
+}
+
 /// Umbrella macro selecting the appropriate sub-shape. Adopters who
 /// prefer the fixed phrasing can write `policy! { reject "id" when expr
 /// because "..." }` and so on.
@@ -115,6 +135,12 @@ macro_rules! policy {
     };
     ( bind $name:literal = $expr:expr, then $body:expr $(,)? ) => {
         $crate::bind_as!($name = $expr, then $body)
+    };
+    ( run $label:literal $(,)? ) => {
+        $crate::run!($label)
+    };
+    ( run $label:literal, with [ $($slot:literal),+ $(,)? ] $(,)? ) => {
+        $crate::run!($label, with [$($slot),+])
     };
 }
 

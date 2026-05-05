@@ -1,4 +1,4 @@
-//! SQL backtest backend — compiles a `RuleNode`'s deny condition into
+//! SQL backtest backend - compiles a `RuleNode`'s deny condition into
 //! a SQL `WHERE` clause. Run against historical flow to measure
 //! hit-rate and trader impact before deploying a rule.
 //!
@@ -39,6 +39,11 @@ fn rule_to_sql(rule: &RuleNode) -> String {
             format!("({})", parts.join(" OR "))
         }
         RuleNode::Bind { then, .. } => rule_to_sql(then),
+        // A `Run` leaf has no row-matching predicate. SQL backends
+        // pull the rows that *would* trigger a verdict; an action
+        // node carries no condition of its own, so it contributes
+        // `TRUE` (any row at this branch's gates fires the action).
+        RuleNode::Run(_) => "TRUE".to_string(),
     }
 }
 

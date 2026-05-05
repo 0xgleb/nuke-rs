@@ -1,10 +1,10 @@
-//! Rule ID registry — every [`RuleId`](crate::policy::RuleId) used by a
+//! Rule ID registry - every [`RuleId`](crate::policy::RuleId) used by a
 //! policy is registered into a [`linkme`]-distributed slice at compile
 //! time. CI then asserts:
 //!
-//! 1. **Uniqueness** — no two rules share an ID
+//! 1. **Uniqueness** - no two rules share an ID
 //!    ([`assert_unique_ids`]).
-//! 2. **Markdown coverage** — every registered rule has a matching
+//! 2. **Markdown coverage** - every registered rule has a matching
 //!    file under `policies/` ([`assert_markdown_coverage`]) so
 //!    compliance can read what a rule does without reading Rust.
 //!
@@ -14,9 +14,6 @@
 //! use nuke::policy::{RuleId, register_rule};
 //! register_rule!(RuleId::new("orders.max_size"), "orders/max_size.md");
 //! ```
-//!
-//! The `policy!` macro (lands in task #20) will emit registrations
-//! automatically; until then call `register_rule!` by hand.
 
 use std::collections::HashSet;
 use std::path::Path;

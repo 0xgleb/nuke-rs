@@ -1,9 +1,9 @@
 //! Semantic diff over `RuleNode`. Classifies a change between two
-//! revisions of a rule as `Identical`, `Narrowed` (more conditions →
-//! denies more strictly), `Widened` (fewer conditions → allows more),
+//! revisions of a rule as `Identical`, `Narrowed` (more conditions ->
+//! denies more strictly), `Widened` (fewer conditions -> allows more),
 //! or `Unrelated` (structural change beyond either).
 //!
-//! Better than `git diff` for review of policy changes — text-level
+//! Better than `git diff` for review of policy changes - text-level
 //! diffs can't tell whether a refactor preserved meaning, and they
 //! highlight whitespace-only churn the same as material changes.
 
@@ -13,7 +13,7 @@ use crate::policy::backends::wire::schema_hash;
 /// Outcome of comparing two `RuleNode` revisions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Diff {
-    /// Same hash → byte-identical AST.
+    /// Same hash -> byte-identical AST.
     Identical,
     /// `after` requires *more* conditions to deny / accept than `before`.
     /// Strictly fewer inputs deny than before.
@@ -21,7 +21,7 @@ pub enum Diff {
     /// `after` requires *fewer* conditions / has *more* deny paths than
     /// `before`. Strictly more inputs deny than before.
     Widened,
-    /// Structural change beyond a simple narrow/widen — needs human
+    /// Structural change beyond a simple narrow/widen - needs human
     /// review.
     Unrelated,
 }
@@ -63,6 +63,9 @@ fn leaf_count(rule: &RuleNode) -> usize {
         RuleNode::RejectIf { .. } | RuleNode::EscalateIf { .. } => 1,
         RuleNode::Given { then, .. } | RuleNode::Bind { then, .. } => leaf_count(then),
         RuleNode::All(rules) | RuleNode::Any(rules) => rules.iter().map(leaf_count).sum(),
+        // Side-effect leaves count as a leaf for diff purposes too -
+        // adding or removing one is a meaningful behavioral change.
+        RuleNode::Run(_) => 1,
     }
 }
 
@@ -76,6 +79,9 @@ fn predicate_complexity(rule: &RuleNode) -> usize {
         }
         RuleNode::All(rules) | RuleNode::Any(rules) => rules.iter().map(predicate_complexity).sum(),
         RuleNode::Bind { expr, then, .. } => expr_size(expr) + predicate_complexity(then),
+        // `Run` carries no predicate and contributes zero predicate
+        // complexity (its captures are just slot references).
+        RuleNode::Run(_) => 0,
     }
 }
 
@@ -125,7 +131,7 @@ mod tests {
         let double = Expr::<BoolT>::and(vec![Expr::<BoolT>::lit(true), Expr::<BoolT>::lit(true)]);
         let before = reject_if(single.into_inner());
         let after = reject_if(double.into_inner());
-        // More expressions → narrower rule.
+        // More expressions -> narrower rule.
         assert_eq!(diff(&before, &after), Diff::Narrowed);
     }
 }

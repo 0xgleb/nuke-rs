@@ -1,4 +1,4 @@
-//! TLA+ export — emits a TLA+ snippet for the rule's deny condition.
+//! TLA+ export - emits a TLA+ snippet for the rule's deny condition.
 //! Used when a policy participates in a larger order-lifecycle state
 //! machine and you want the combined model checked.
 //!
@@ -45,6 +45,10 @@ fn rule_to_tla(rule: &RuleNode) -> String {
             .collect::<Vec<_>>()
             .join(" \\/ "),
         RuleNode::Bind { then, .. } => rule_to_tla(then),
+        // `Run` is not a logical assertion. It contributes `TRUE` to
+        // the predicate so the surrounding conjunction / disjunction
+        // structure stays well-formed.
+        RuleNode::Run(_) => "TRUE".to_string(),
     }
 }
 

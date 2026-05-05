@@ -33,29 +33,25 @@ pub mod job;
 pub mod policy;
 pub mod tracing;
 
+mod dep;
 mod feed;
-mod has_subject;
 mod ledger;
 mod macros;
 mod one_of;
 mod reactor;
 mod subject;
-mod subscribe;
-mod subscribed;
 mod venue;
 
 pub use apalis::{PipelineError, pump_through_apalis};
+pub use dep::{Cons, DepList, Dependent, HasDep, Never, Nil, Subscribe, Transport, Wire};
 pub use error::{Error, Result};
 pub use feed::{Feed, FeedStream};
-pub use has_subject::HasDep;
 pub use job::{Job, Label, work};
 pub use ledger::Ledger;
 pub use nuke_derive::Domain;
 pub use one_of::{Fold, OneOf};
 pub use reactor::Reactor;
 pub use subject::Subject;
-pub use subscribe::{Subscribe, Transport, Wire};
-pub use subscribed::{Cons, DepList, Dependent, Never, Nil};
 pub use venue::{TradingVenue, Venue};
 
 /// Re-exports used by macro expansions. Not part of the supported API.
@@ -73,11 +69,10 @@ pub mod reexports {
 /// `secretspec`). Reach for `nuke::Error` / `nuke::Result` explicitly
 /// when needed.
 pub mod prelude {
+    pub use crate::dep::{Cons, DepList, Dependent, HasDep, Never, Nil};
     pub use crate::deps;
-    pub use crate::has_subject::HasDep;
     pub use crate::one_of::{Fold, OneOf};
     pub use crate::reactor::Reactor;
     pub use crate::subject::Subject;
-    pub use crate::subscribed::{Cons, DepList, Dependent, Never, Nil};
     pub use async_trait::async_trait;
 }

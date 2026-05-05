@@ -1,13 +1,16 @@
-//! [`Decision`] — the total verdict algebra returned by every rule
+//! [`Decision`] - the total verdict algebra returned by every rule
 //! evaluation.
 //!
 //! Three variants and only three: `Allow`, `Deny`, `Escalate`. Verdict
 //! types that don't appear here can't be returned by a rule, which keeps
 //! every backend's match exhaustive.
 
+use std::collections::BTreeMap;
+
 use serde::Serialize;
 
-use crate::policy::reason::{Bindings, Reason};
+use crate::job::Label;
+use crate::policy::reason::{Bindings, Reason, SlotName, SlotValue};
 
 /// What a rule decides about an input.
 ///
@@ -50,19 +53,96 @@ impl Decision {
     }
 }
 
+/// Full result of evaluating a rule: the verdict plus any side-effect
+/// actions queued by [`crate::policy::ast::RuleNode::Run`] leaves
+/// reached during the walk.
+///
+/// The runtime evaluator returns this; the DAG compiler compiles to
+/// the same shape (verdict-then-actions) but executes each action as
+/// its own apalis node so retries / persistence are per-action.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Outcome {
+    pub decision: Decision,
+    pub actions: Vec<QueuedAction>,
+}
+
+impl Outcome {
+    pub fn allow() -> Self {
+        Self {
+            decision: Decision::Allow,
+            actions: Vec::new(),
+        }
+    }
+
+    pub fn allow_with(actions: Vec<QueuedAction>) -> Self {
+        Self {
+            decision: Decision::Allow,
+            actions,
+        }
+    }
+
+    pub fn deny(rule: RuleId, reason: Reason, bindings: Bindings) -> Self {
+        Self {
+            decision: Decision::Deny {
+                rule,
+                reason,
+                bindings,
+            },
+            actions: Vec::new(),
+        }
+    }
+
+    pub fn escalate(
+        rule: RuleId,
+        to: EscalationTarget,
+        reason: Reason,
+        bindings: Bindings,
+    ) -> Self {
+        Self {
+            decision: Decision::Escalate {
+                rule,
+                to,
+                reason,
+                bindings,
+            },
+            actions: Vec::new(),
+        }
+    }
+
+    pub fn is_allow(&self) -> bool {
+        self.decision.is_allow()
+    }
+    pub fn is_deny(&self) -> bool {
+        self.decision.is_deny()
+    }
+    pub fn is_escalate(&self) -> bool {
+        self.decision.is_escalate()
+    }
+}
+
+/// A side-effect action enqueued by [`crate::policy::ast::RuleNode::Run`].
+///
+/// `label` names the [`crate::Job`] to invoke; `payload` is the snapshot
+/// of slot values captured at the moment the `Run` leaf was reached.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QueuedAction {
+    pub label: Label,
+    pub payload: BTreeMap<SlotName, SlotValue>,
+}
+
 /// Stable identifier for a rule. Interned `&'static str` so equality is
 /// pointer-cheap and IDs never invalidate.
 ///
-/// IDs are registered at startup via the rule registry (lands with the
-/// `policy!` macro epic). Creating a `RuleId` directly bypasses that
-/// registry — only do it from generated code.
+/// IDs are registered at startup via the rule registry. Creating a
+/// `RuleId` directly bypasses that registry - only do it from generated
+/// code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
 pub struct RuleId(&'static str);
 
 impl RuleId {
     /// Construct a `RuleId` from a `&'static str`. Intended for
     /// macro-generated callers; hand-written usage should pre-register
-    /// through the rule registry once it lands.
+    /// through the rule registry.
     pub const fn new(name: &'static str) -> Self {
         Self(name)
     }
@@ -80,7 +160,7 @@ impl std::fmt::Display for RuleId {
 
 /// Where an `Escalate` decision should be routed (e.g. `"compliance"`,
 /// `"risk-desk"`, `"manual-review"`). Backends decide what to do with
-/// the target — the rule itself just names it.
+/// the target - the rule itself just names it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub struct EscalationTarget(&'static str);
 
