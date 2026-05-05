@@ -22,7 +22,7 @@ use futures_util::{Stream, StreamExt, stream};
 use crate::error::{Error, Result};
 use crate::job::work;
 use crate::reactor::Reactor;
-use crate::subscribed::SubjectList;
+use crate::subscribed::DepList;
 
 /// Drive `reactor` to convergence: consume `events` (typed event
 /// union matching the reactor's subject list), invoke `reactor.react`
@@ -41,8 +41,8 @@ pub async fn pump_through_apalis<R, S>(events: S, reactor: Arc<R>, ctx: Arc<R::C
 where
     R: Reactor + 'static,
     R::Ctx: Send + Sync + 'static,
-    <R::Subjects as SubjectList>::Event: Send + 'static,
-    S: Stream<Item = std::result::Result<<R::Subjects as SubjectList>::Event, PipelineError>>
+    <R::Deps as DepList>::Event: Send + 'static,
+    S: Stream<Item = std::result::Result<<R::Deps as DepList>::Event, PipelineError>>
         + Send
         + Unpin
         + 'static,

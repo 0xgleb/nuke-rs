@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 /// Parameters for an `eth_subscribe("logs", ...)` call.
 ///
-/// Built by [`Subject::subscription`](crate::Subject::subscription) —
+/// Built by [`Subject::subscription`](crate::Subject::subscription) -
 /// usually through `#[derive(EvmSubject)]`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubscriptionSpec {

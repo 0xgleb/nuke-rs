@@ -4,14 +4,14 @@
 //!
 //! 1. A snake_case module beside the struct (e.g. `mod order`) with one
 //!    pub fn per field. Each function returns a typed
-//!    `nuke::policy::ast::Expr<TypeTag>` referencing the field —
+//!    `nuke::policy::ast::Expr<TypeTag>` referencing the field -
 //!    rule authors write `order::qty()` instead of stringly-typed
 //!    `field::<QtyT>("order", "qty")`.
 //! 2. An inherent `read_field(&self, name: &str) -> Option<SlotValue>`
 //!    method on the struct so contexts can delegate to it instead of
 //!    writing a giant `match` by hand.
 //!
-//! Field-type → AST-type-tag mapping is hardcoded against the canonical
+//! Field-type -> AST-type-tag mapping is hardcoded against the canonical
 //! domain primitives (`Decimal`, `Px`, `Qty`, `Notional`, `Symbol`,
 //! `Side`, `bool`).
 
@@ -110,7 +110,7 @@ fn type_mapping(ty: &Type) -> syn::Result<TypeMapping> {
         _ => {
             return Err(syn::Error::new_spanned(
                 ty,
-                "unsupported field type — must be one of: Decimal, Px, Qty, Notional, Symbol, Side, bool",
+                "unsupported field type - must be one of: Decimal, Px, Qty, Notional, Symbol, Side, bool",
             ));
         }
     };

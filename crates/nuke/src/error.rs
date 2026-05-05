@@ -12,7 +12,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 /// Errors produced by the framework itself.
 ///
-/// User reactor errors are NOT wrapped here — they are surfaced
+/// User reactor errors are NOT wrapped here - they are surfaced
 /// separately by the run loop so the user can match on their own type.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

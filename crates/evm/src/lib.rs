@@ -1,6 +1,6 @@
 //! EVM Source / TradingVenue adapter for the `nuke` framework.
 //!
-//! This crate is **not** part of the framework — it's a worked
+//! This crate is **not** part of the framework - it's a worked
 //! implementation of `nuke::Subject` + (eventually) the abstract
 //! `Source` / `TradingVenue` traits, against an Ethereum JSON-RPC
 //! websocket transport. Examples and applications opt in by depending
@@ -8,13 +8,15 @@
 //!
 //! # Layout
 //!
-//! - [`EvmWsSource`] — owns one ws connection + background task that
+//! - [`EvmWsSource`] - owns one ws connection + background task that
 //!   does JSON-RPC framing and `eth_subscribe` management. Notifications
 //!   are forwarded as [`RawLog`] values into an `mpsc` channel.
-//! - [`Subscribe`] — type-level walker that opens one `eth_subscribe`
-//!   per `Subject` in a reactor's list and builds a [`Dispatcher`].
-//! - [`pump`] — wires `EvmWsSource → Subscribe → Dispatcher` and feeds
-//!   the resulting typed event stream into the framework's
+//! - [`Dispatcher`] - address-keyed decoder map. The framework's
+//!   [`nuke::Subscribe`] walks the reactor's dep list and uses this
+//!   crate's [`nuke::Wire`] / [`nuke::Transport`] impls on
+//!   `EvmWsSource` to populate it.
+//! - [`pump`] - wires `EvmWsSource -> nuke::Subscribe -> Dispatcher`
+//!   and feeds the resulting typed event stream into the framework's
 //!   `nuke::pump_through_apalis` so apalis owns the run loop.
 
 mod dispatch;
@@ -22,8 +24,8 @@ mod subject;
 mod subscription;
 mod transport;
 
-pub use dispatch::{Dispatcher, Subscribe};
-// Both the trait and the derive macro are exported as `EvmSubject` —
+pub use dispatch::Dispatcher;
+// Both the trait and the derive macro are exported as `EvmSubject` -
 // they live in different namespaces (type vs macro) so Rust resolves
 // `impl EvmSubject for ...` (trait) and `#[derive(EvmSubject)]` (macro)
 // without ambiguity.
@@ -35,7 +37,7 @@ pub use transport::EvmWsSource;
 use std::sync::Arc;
 
 use futures_util::StreamExt;
-use nuke::{Reactor, SubjectList, pump_through_apalis};
+use nuke::{DepList, Reactor, Subscribe, pump_through_apalis};
 use tokio_stream::wrappers::ReceiverStream;
 
 /// ABI decode failure for an on-chain log.
@@ -65,20 +67,24 @@ pub mod reexports {
 
 /// Run a reactor against an EVM JSON-RPC websocket source.
 ///
-/// Reads `R::Subjects` at compile time, opens the corresponding
-/// `eth_subscribe` calls on `source`, and pipes the resulting typed
-/// event stream through `nuke::pump_through_apalis`, which invokes
-/// `reactor.react(event)` per item, enqueues the resulting jobs, and
-/// runs them via `Job::perform(&ctx)`. The framework owns the apalis
-/// run loop; this function is the EVM-specific bridge.
+/// Reads `R::Deps` at compile time, opens the corresponding
+/// `eth_subscribe` calls on `source` via the framework's
+/// [`nuke::Subscribe`] walker (which delegates to this crate's
+/// [`Wire`](nuke::Wire) impl on `EvmWsSource`), and pipes the
+/// resulting typed event stream through `nuke::pump_through_apalis`,
+/// which invokes `reactor.react(event)` per item, enqueues the
+/// resulting jobs, and runs them via `Job::perform(&ctx)`. The
+/// framework owns both the type-level walker and the apalis run loop;
+/// this function only builds the venue-shaped event stream that feeds
+/// them.
 pub async fn pump<R>(mut source: EvmWsSource, reactor: Arc<R>, ctx: Arc<R::Ctx>) -> nuke::Result<()>
 where
     R: Reactor + 'static,
-    R::Subjects: Subscribe<R::Subjects>,
+    R::Deps: Subscribe<R::Deps, EvmWsSource>,
     R::Ctx: Send + Sync + 'static,
-    <R::Subjects as SubjectList>::Event: Send + 'static,
+    <R::Deps as DepList>::Event: Send + 'static,
 {
-    let dispatcher = <R::Subjects as Subscribe<R::Subjects>>::open_all(&source).await?;
+    let dispatcher = <R::Deps as Subscribe<R::Deps, EvmWsSource>>::open_all(&source).await?;
     let log_stream = source
         .take_log_stream()
         .ok_or_else(|| nuke::Error::msg("EvmWsSource log stream already taken"))?;

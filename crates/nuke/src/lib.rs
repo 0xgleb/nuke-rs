@@ -9,15 +9,17 @@
 //! the durable architectural reference. Public vocabulary at a
 //! glance:
 //!
-//! - [`Subject`] - typed marker for an event source the reactor
-//!   cares about. Adapter crates extend it (e.g. `evm::EvmSubject`)
-//!   with venue-specific subscription / decode methods.
-//! - [`Reactor`] - what reacts to events from a *list* of subjects;
-//!   the event type is *computed* from the list (no manual enum).
-//! - [`subjects!`] - declares a reactor's subject list once and
-//!   generates the [`Subscribed`] / [`HasSubject`] impls.
+//! - [`Subject`] - typed marker for a dep the reactor reacts to.
+//!   Adapter crates extend it (e.g. `evm::EvmSubject`) with
+//!   transport-specific subscription / decode methods.
+//! - [`Reactor`] - what reacts to events from a *list* of deps; the
+//!   event type is *computed* from the list (no manual enum).
+//! - [`deps!`] - declares a reactor's dep list once and generates
+//!   the [`Dependent`] / [`HasDep`] impls. Naming mirrors
+//!   event-sorcery's `deps!` so the same idiom covers both external
+//!   streams and internal aggregates.
 //! - [`pump_through_apalis`](apalis::pump_through_apalis) - the
-//!   venue-agnostic run loop adapter crates feed.
+//!   transport-agnostic run loop adapter crates feed.
 
 // Make `::nuke::*` paths in proc-macro-emitted code resolve when used
 // from within this crate (tests that don't go through cargo
@@ -38,20 +40,22 @@ mod macros;
 mod one_of;
 mod reactor;
 mod subject;
+mod subscribe;
 mod subscribed;
 mod venue;
 
 pub use apalis::{PipelineError, pump_through_apalis};
 pub use error::{Error, Result};
 pub use feed::{Feed, FeedStream};
-pub use has_subject::HasSubject;
+pub use has_subject::HasDep;
 pub use job::{Job, Label, work};
 pub use ledger::Ledger;
 pub use nuke_derive::Domain;
 pub use one_of::{Fold, OneOf};
 pub use reactor::Reactor;
 pub use subject::Subject;
-pub use subscribed::{Cons, Never, Nil, SubjectList, Subscribed};
+pub use subscribe::{Subscribe, Transport, Wire};
+pub use subscribed::{Cons, DepList, Dependent, Never, Nil};
 pub use venue::{TradingVenue, Venue};
 
 /// Re-exports used by macro expansions. Not part of the supported API.
@@ -63,17 +67,17 @@ pub mod reexports {
 
 /// Common imports for users of the framework.
 ///
-/// Intentionally does **not** export `Error`/`Result` — using the
+/// Intentionally does **not** export `Error`/`Result` - using the
 /// prelude would shadow `std::result::Result`, breaking call sites
 /// that mix in other error types (e.g. macro-generated code from
 /// `secretspec`). Reach for `nuke::Error` / `nuke::Result` explicitly
 /// when needed.
 pub mod prelude {
-    pub use crate::has_subject::HasSubject;
+    pub use crate::deps;
+    pub use crate::has_subject::HasDep;
     pub use crate::one_of::{Fold, OneOf};
     pub use crate::reactor::Reactor;
     pub use crate::subject::Subject;
-    pub use crate::subjects;
-    pub use crate::subscribed::{Cons, Never, Nil, SubjectList, Subscribed};
+    pub use crate::subscribed::{Cons, DepList, Dependent, Never, Nil};
     pub use async_trait::async_trait;
 }

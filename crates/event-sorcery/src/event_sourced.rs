@@ -1,4 +1,4 @@
-//! The user-facing [`EventSourced`] trait — rich associated types and
+//! The user-facing [`EventSourced`] trait - rich associated types and
 //! consts that capture every load-bearing decision about an
 //! event-sourced entity. Naming asymmetry between event-side and
 //! command-side methods is intentional: events are *facts*, commands
@@ -39,7 +39,7 @@ pub trait EventSourced: Clone + Debug + Send + Sync + Sized + Serialize + Deseri
     /// Domain events that drive state changes.
     type Event: DomainEvent;
     /// Commands that produce events. One type for both initialization
-    /// and transitions — the lifecycle routes by state.
+    /// and transitions - the lifecycle routes by state.
     type Command: Send + Sync;
     /// Domain-specific errors from command handlers / event
     /// application. Use [`crate::Never`] for infallible entities.
@@ -67,16 +67,16 @@ pub trait EventSourced: Clone + Debug + Send + Sync + Sized + Serialize + Deseri
 
     /// Derive new state from an event applied to the current entity.
     ///
-    /// - `Ok(Some(new_state))` — applied successfully.
-    /// - `Ok(None)` — event doesn't apply to current state (mismatch).
-    /// - `Err(error)` — domain failure (e.g. arithmetic overflow).
+    /// - `Ok(Some(new_state))` - applied successfully.
+    /// - `Ok(None)` - event doesn't apply to current state (mismatch).
+    /// - `Err(error)` - domain failure (e.g. arithmetic overflow).
     fn evolve(entity: &Self, event: &Self::Event) -> Result<Option<Self>, Self::Error>;
 
     // --- Command side: processing commands to produce events ---------
 
     /// Handle a command when the entity doesn't exist yet.
     ///
-    /// No `&self` — impossible to accidentally reference state during
+    /// No `&self` - impossible to accidentally reference state during
     /// creation.
     async fn initialize(
         command: Self::Command,

@@ -3,7 +3,7 @@ name = "evm"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "EVM Source / TradingVenue adapter for the nuke framework. Examples-only — not pulled in by framework crates."
+description = "EVM Source / TradingVenue adapter for the nuke framework. Examples-only - not pulled in by framework crates."
 
 [lib]
 path = "src/lib.rs"
@@ -27,7 +27,7 @@ serde_json.workspace = true
 # Tower middleware (the layer stack inside the ws source)
 tower.workspace = true
 
-# EVM types + ABI codegen — venue specifics live HERE, not in the framework.
+# EVM types + ABI codegen - venue specifics live HERE, not in the framework.
 alloy-primitives.workspace = true
 alloy-sol-types.workspace = true
 
