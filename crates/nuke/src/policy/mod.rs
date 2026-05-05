@@ -21,9 +21,9 @@ pub use action::Action;
 pub use capability::{Capability, Context, HasInventory, HasMarketData, HasOrder, HasRiskLimits};
 
 pub use ast::{
-    BinOp, BinOpExpr, BoolT, CmpExpr, CmpOp, Comparable, DecT, Expr, ExprType, FieldRef, InnerExpr,
-    LitValue, NotionalT, Numeric, PxT, QtyT, RuleNode, SideT, SymbolT, TextT, TypeTag, add, eq,
-    field, ge, gt, le, lt, ne, notional_div_px, qty_times_px, sub,
+    BinOp, BinOpExpr, BoolT, CmpExpr, CmpOp, Comparable, DecT, Expr, ExprType, FieldRef, IfExpr,
+    InnerExpr, LitValue, NotionalT, Numeric, PxT, QtyT, RuleNode, SideT, SymbolT, TextT, TypeTag,
+    add, eq, field, ge, gt, if_else, le, lt, ne, notional_div_px, qty_times_px, sub,
 };
 pub use decision::{Decision, EscalationTarget, RuleId};
 pub use reason::{Bindings, Reason, ReasonChunk, ReasonTemplate, Slot, SlotName, SlotValue};

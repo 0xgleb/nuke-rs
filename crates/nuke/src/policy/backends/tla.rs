@@ -84,6 +84,12 @@ fn expr_to_tla(expr: &InnerExpr) -> String {
             .map(expr_to_tla)
             .collect::<Vec<_>>()
             .join(" \\/ "),
+        InnerExpr::If(node) => format!(
+            "(IF {} THEN {} ELSE {})",
+            expr_to_tla(&node.cond),
+            expr_to_tla(&node.then),
+            expr_to_tla(&node.otherwise),
+        ),
     }
 }
 

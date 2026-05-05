@@ -89,6 +89,12 @@ fn expr_to_sql(expr: &InnerExpr) -> String {
                     .join(" OR ")
             )
         }
+        InnerExpr::If(node) => format!(
+            "(CASE WHEN {} THEN {} ELSE {} END)",
+            expr_to_sql(&node.cond),
+            expr_to_sql(&node.then),
+            expr_to_sql(&node.otherwise),
+        ),
     }
 }
 

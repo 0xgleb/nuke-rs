@@ -78,6 +78,11 @@ fn collect_expr_decls(expr: &InnerExpr, into: &mut BTreeSet<String>) {
                 collect_expr_decls(part, into);
             }
         }
+        InnerExpr::If(node) => {
+            collect_expr_decls(&node.cond, into);
+            collect_expr_decls(&node.then, into);
+            collect_expr_decls(&node.otherwise, into);
+        }
     }
 }
 
@@ -146,6 +151,12 @@ fn expr_to_smt(expr: &InnerExpr) -> String {
         InnerExpr::Or(parts) => format!(
             "(or {})",
             parts.iter().map(expr_to_smt).collect::<Vec<_>>().join(" ")
+        ),
+        InnerExpr::If(node) => format!(
+            "(ite {} {} {})",
+            expr_to_smt(&node.cond),
+            expr_to_smt(&node.then),
+            expr_to_smt(&node.otherwise),
         ),
     }
 }

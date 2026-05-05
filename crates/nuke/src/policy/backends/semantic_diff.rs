@@ -94,6 +94,9 @@ fn expr_size(expr: &InnerExpr) -> usize {
         InnerExpr::And(parts) | InnerExpr::Or(parts) => {
             1 + parts.iter().map(expr_size).sum::<usize>()
         }
+        InnerExpr::If(node) => {
+            1 + expr_size(&node.cond) + expr_size(&node.then) + expr_size(&node.otherwise)
+        }
     }
 }
 

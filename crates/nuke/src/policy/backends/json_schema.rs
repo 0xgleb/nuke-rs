@@ -136,6 +136,11 @@ fn walk_expr(expr: &InnerExpr, fields: &mut BTreeMap<String, FieldShape>) {
                 walk_expr(part, fields);
             }
         }
+        InnerExpr::If(node) => {
+            walk_expr(&node.cond, fields);
+            walk_expr(&node.then, fields);
+            walk_expr(&node.otherwise, fields);
+        }
     }
 }
 
