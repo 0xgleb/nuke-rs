@@ -71,6 +71,10 @@ linkme = "0.3.36"
 ciborium = "0.2.2"
 sha2 = "0.11.0"
 
+# Persistence layer — cqrs-es with the event-sorcery-style adapter.
+# Public surface stays in nuke vocab; cqrs-es types are internal.
+cqrs-es = "0.4.12"
+
 # Observability
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }

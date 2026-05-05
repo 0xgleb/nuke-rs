@@ -19,6 +19,7 @@ extern crate self as nuke;
 pub mod domain;
 pub mod error;
 pub mod evm;
+pub mod persist;
 pub mod policy;
 pub mod tracing;
 
