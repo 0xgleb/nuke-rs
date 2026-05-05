@@ -1,0 +1,43 @@
+[package]
+name = "uptime-monitor"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Polling-Source example for the nuke framework. Two service-health pollers feed a reactor that enqueues a notification job on status transitions."
+
+[lib]
+name = "uptime_monitor"
+path = "src/lib.rs"
+
+[[bin]]
+name = "uptime-monitor"
+path = "src/main.rs"
+
+[dependencies]
+nuke.workspace = true
+
+# Async runtime
+tokio = { workspace = true, features = [
+  "macros",
+  "rt-multi-thread",
+  "sync",
+  "time",
+] }
+tokio-stream.workspace = true
+
+# Serde for the Job payload
+serde.workspace = true
+
+# Stream combinators
+futures-util.workspace = true
+
+# Observability
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+# Error wrapping
+thiserror.workspace = true
+
+# Async-trait for Reactor::react
+async-trait.workspace = true

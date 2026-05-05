@@ -7,6 +7,7 @@ members = [
   "crates/evm",
   "crates/evm-derive",
   "examples/dex_arb",
+  "examples/uptime_monitor",
 ]
 
 [workspace.package]

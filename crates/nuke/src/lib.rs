@@ -99,5 +99,5 @@ pub mod prelude {
     pub use crate::reactor::Reactor;
     pub use crate::subject::Subject;
     pub use async_trait::async_trait;
-    pub use event_sorcery::{Cons, DepList, Dependent, Fold, HasDep, Never, Nil, OneOf, deps};
+    pub use event_sorcery::{Cons, Dep, DepList, Dependent, Fold, HasDep, Never, Nil, OneOf, deps};
 }

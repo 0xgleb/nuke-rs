@@ -179,17 +179,19 @@ v2:
 - [ ] The e2e test asserts the policy correctly rejects below-threshold
       opportunities.
 
-## Second example - polling source + non-DEX domain
+## Completed: Second example - polling source + non-DEX domain
 
-Exercises a transport other than ws (polling) and proves the framework is
-genuinely general-purpose by using a non-blockchain domain. Candidates:
+[`examples/uptime_monitor/`](examples/uptime_monitor/). Two service-health
+pollers built on `ExtQuery` + `Polling` feed `pump_dep_streams`; the reactor
+remembers per-service status and emits an `AlertJob` on each transition. Inline
+test asserts deterministic alert sequences over a finite sample. Covers the
+complementary gap to `dex_arb`:
 
-- [ ] A scheduled rebalancer that polls a price feed via REST.
-- [ ] A non-finance reactor (watch-this-API-for-a-condition agent).
-- [ ] An IoT-ish sensor -> alert pipeline.
-
-Pick when implementing; document why the choice covers a different gap from the
-arb example.
+- Polling rather than ws transport (no `Subject`-style decoder; `ExtQuery` +
+  `Polling` is the entire wire-side surface).
+- Non-blockchain domain (no `Ledger` / venue, no decimal math).
+- Multi-source fan-in via `inject_ext_stream` + `pump_dep_streams` rather than
+  the EVM-style shared `Subscribe<L, T>` walker.
 
 ## Framework deepening
 

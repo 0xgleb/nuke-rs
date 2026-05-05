@@ -85,21 +85,19 @@ SQL `WHERE` compiler, CBOR wire format with SHA-256 schema hash, semantic diff
 (narrowed/widened/unrelated), coverage telemetry, TLA+ predicate export. Each is
 independently usable.
 
-## Example
+## Examples
 
-[`examples/arb_bot/main.rs`](examples/arb_bot/main.rs) - DEX/DEX arbitrage
-between Uniswap V2 and SushiSwap V2 on Ethereum mainnet. Demonstrates: a
-chain-event Source via the EVM adapter, the detector reactor, a `policy!` block
-that gates trade submission on profitability, and apalis Jobs that perform the
-actual trade submission.
-
-```sh
-nix develop --impure -c cargo run --example arb_bot
-```
-
-The end-to-end test (`tests/arb_bot_e2e.rs`) runs the same wiring against an
-embedded mock JSON-RPC websocket server with a deterministic fixture - no
-network, no secrets, no flakes.
+- [`examples/dex_arb/`](examples/dex_arb/) - DEX/DEX arbitrage between Uniswap
+  V2 and SushiSwap V2 on Ethereum mainnet. Demonstrates a streaming `Source` via
+  the EVM adapter, the detector reactor, a `Validator`-gated profit check, and
+  apalis Jobs for trade submission. End-to-end inline test runs against an
+  embedded mock JSON-RPC ws server (no network, no secrets, no flakes). Run with
+  `cargo run -p dex-arb`.
+- [`examples/uptime_monitor/`](examples/uptime_monitor/) - polling Source on a
+  non-DEX domain. Two service-health pollers built on `ExtQuery` + `Polling`
+  feed the framework's `pump_dep_streams` fan-in; a reactor emits an `AlertJob`
+  on each status transition. Inline test asserts deterministic alert sequences.
+  Run with `cargo run -p uptime-monitor`.
 
 ## Documentation entry points
 
