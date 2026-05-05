@@ -19,7 +19,7 @@ use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
 use tokio::sync::Mutex;
 
-secretspec_derive::declare_secrets!("secretspec.toml");
+secretspec_derive::declare_secrets!("../../secretspec.toml");
 
 sol! {
     #[derive(Debug)]

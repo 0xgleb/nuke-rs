@@ -1,0 +1,69 @@
+[package]
+name = "nuke"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "General-purpose event-driven framework — Source/Reactor/Job traits + eDSL + cqrs/es bridge. See repo CLAUDE.md."
+
+[lib]
+path = "src/lib.rs"
+
+[[example]]
+name = "arb_bot"
+path = "examples/arb_bot/main.rs"
+
+[dependencies]
+nuke-derive.workspace = true
+
+# Type-level + async core
+async-trait.workspace = true
+thiserror.workspace = true
+futures-util.workspace = true
+tokio = { workspace = true }
+tokio-stream.workspace = true
+
+# WebSocket transport (will move to a transport adapter crate when the
+# Source/TradingVenue split lands)
+tokio-tungstenite.workspace = true
+
+# JSON-RPC framing + SerDe
+serde.workspace = true
+serde_json.workspace = true
+
+# Tower middleware
+tower.workspace = true
+
+# Apalis (internal — never re-exported)
+apalis.workspace = true
+apalis-core.workspace = true
+apalis-workflow.workspace = true
+
+# EVM types (transitional — moving to adapters/evm/)
+alloy-primitives.workspace = true
+alloy-sol-types.workspace = true
+
+# Domain primitives
+rust_decimal.workspace = true
+
+# Rule registry
+linkme.workspace = true
+
+# eDSL backend deps
+ciborium.workspace = true
+sha2.workspace = true
+
+# Persistence
+cqrs-es.workspace = true
+
+# Observability
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+# Secrets (consumed by the example, not by the framework)
+secretspec.workspace = true
+secretspec-derive.workspace = true
+secrecy.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+trybuild.workspace = true
