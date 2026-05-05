@@ -2,27 +2,28 @@
 
 The framework crate. Public vocabulary at a glance:
 
-| Module       | What it exports                                                                                                                                 |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apalis`     | `pump_through_apalis` - the venue-agnostic run loop adapter crates feed.                                                                        |
-| `auditor`    | `Auditor` + `AuditTick<Snapshot, Context>` for first-class audit emission.                                                                      |
-| `domain`     | Decimal-based newtypes (`Symbol` / `Side` / `Px` / `Qty` / `Notional`) with typed conversions. Never `f64`.                                     |
-| `error`      | `Error` / `Result` aliases.                                                                                                                     |
-| `ext`        | Tower-shaped adapter primitives: `ExtStream`, `ExtQuery`, `Polling` (auto-impls `ExtStream` from any `ExtQuery + tick stream`).                 |
-| `feed`       | `Feed<S: Subject>` - read-only typed event stream from a venue.                                                                                 |
-| `identifier` | `Identifier<I>` - "I have a typed id of type `I`".                                                                                              |
-| `job`        | `Job<Ctx>` - the unit of durable retryable work + the `work` apalis handler with `backon` retries.                                              |
-| `ledger`     | `Ledger` - settlement substrate abstraction.                                                                                                    |
-| `lifecycle`  | `OnDisconnect` / `OnTradingDisabled` / `OnShutdown` resilience hooks + their `Default*` impls.                                                  |
-| `order`      | `OrderRequest` / `OrderId` / `Order` / `OrderState` / `Inventory` value-object vocabulary.                                                      |
-| `policy`     | The eDSL: typed `Expr<T>` AST, `RuleNode<A>` rule tree, `Action` trait for verbs, eleven backend folds (markdown / mermaid / SMT / SQL / etc.). |
-| `reactor`    | `Reactor` trait - typed `react(event) -> Vec<Self::Job>`.                                                                                       |
-| `review`     | `Validator<T>` + `validate(...)` + typed `Approved<T>` / `Refused<T, Reason>` wrappers.                                                         |
-| `stream_ext` | `with_index` / `with_timestamp` / `forward_clone_by` stream combinators.                                                                        |
-| `subject`    | `Subject` - typed marker for one external-stream dep. Refines `event_sorcery::Dep`.                                                             |
-| `subscribe`  | Generic walker (`Transport` + `Wire<D>` + `Subscribe<L, T>`) over any `event_sorcery::DepList`.                                                 |
-| `tx`         | `Tx<Item>` generic transmitter + `DropTx` no-op default.                                                                                        |
-| `venue`      | `Venue<L: Ledger>` + write-side `TradingVenue<L>` (`check_inventory`, `place_trade`, `check_order`).                                            |
+| Module       | What it exports                                                                                                                                                                  |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apalis`     | `pump_through_apalis` - the venue-agnostic run loop adapter crates feed.                                                                                                         |
+| `auditor`    | `Auditor` + `AuditTick<Snapshot, Context>` for first-class audit emission.                                                                                                       |
+| `domain`     | Decimal-based newtypes (`Symbol` / `Side` / `Px` / `Qty` / `Notional`) with typed conversions. Never `f64`.                                                                      |
+| `error`      | `Error` / `Result` aliases.                                                                                                                                                      |
+| `ext`        | Tower-shaped adapter primitives: `ExtStream`, `ExtQuery`, `Polling` (auto-impls `ExtStream` from any `ExtQuery + tick stream`).                                                  |
+| `feed`       | `Feed<S: Subject>` - read-only typed event stream from a venue.                                                                                                                  |
+| `identifier` | `Identifier<I>` - "I have a typed id of type `I`".                                                                                                                               |
+| `job`        | `Job<Ctx>` - the unit of durable retryable work + the `work` apalis handler with `backon` retries.                                                                               |
+| `ledger`     | `Ledger` - settlement substrate abstraction.                                                                                                                                     |
+| `lifecycle`  | `OnDisconnect` / `OnTradingDisabled` / `OnShutdown` resilience hooks + their `Default*` impls.                                                                                   |
+| `order`      | `OrderRequest` / `OrderId` / `Order` / `OrderState` / `Inventory` value-object vocabulary.                                                                                       |
+| `policy`     | The eDSL: typed `Expr<T>` AST, `RuleNode<A>` rule tree, `Action` trait for verbs, eleven backend folds (markdown / mermaid / SMT / SQL / etc.).                                  |
+| `pump`       | `inject_ext_stream` lifts an `ExtStream` into the reactor's typed dep union; `pump_dep_streams` fans many lifted streams into one merged event source for `pump_through_apalis`. |
+| `reactor`    | `Reactor` trait - typed `react(event) -> Vec<Self::Job>`.                                                                                                                        |
+| `review`     | `Validator<T>` + `validate(...)` + typed `Approved<T>` / `Refused<T, Reason>` wrappers.                                                                                          |
+| `stream_ext` | `with_index` / `with_timestamp` / `forward_clone_by` stream combinators.                                                                                                         |
+| `subject`    | `Subject` - typed marker for one external-stream dep. Refines `event_sorcery::Dep`.                                                                                              |
+| `subscribe`  | Generic walker (`Transport` + `Wire<D>` + `Subscribe<L, T>`) over any `event_sorcery::DepList`.                                                                                  |
+| `tx`         | `Tx<Item>` generic transmitter + `DropTx` no-op default.                                                                                                                         |
+| `venue`      | `Venue<L: Ledger>` + write-side `TradingVenue<L>` (`check_inventory`, `place_trade`, `check_order`).                                                                             |
 
 The type-level dep-list machinery (`Cons` / `Nil` / `Never` / `OneOf` / `Fold` /
 `Dependent` / `DepList` / `HasDep` + the `deps!` macro) is re-exported from

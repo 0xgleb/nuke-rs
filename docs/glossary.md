@@ -68,9 +68,22 @@ Tower-shaped adapter primitives in `nuke::ext`:
   `Stream<Item = ()>` schedule. The load-bearing piece: a polling adapter is "an
   `ExtQuery` plus a tick stream", never hand-written.
 
-ExtStream is the next-generation framing of Subject; the two will converge once
-the run loop's Reactor wiring is updated to consume `ExtStream`s directly (see
-[`#81`](../ROADMAP.md)).
+ExtStream is the next-generation framing of Subject. They coexist: the
+shared-transport case (one ws connection multiplexed across many Subjects) flows
+through `Subscribe<L, T>`; the per-dep case (one polling REST endpoint or SSE
+channel per dep) flows through `inject_ext_stream` + `pump_dep_streams` (see
+[`pump`](#pump-multi-source-fan-in)).
+
+### pump (multi-source fan-in)
+
+`nuke::inject_ext_stream::<D, L, _>(id, ext)` lifts an `ExtStream` whose events
+are `D::Event`s into the reactor's typed dep union (a
+`Stream<Item =
+Result<L::Event, PipelineError>>`) by capturing `D::Id` and
+routing each event through `HasDep::inject`.
+`nuke::pump_dep_streams(streams, reactor, ctx)` fans a `Vec<DepStream<L>>` in
+via `select_all` and pipes the merged stream into `pump_through_apalis`. The
+multi-source companion to `Subscribe<L, T>`.
 
 ## Reactor layer
 
