@@ -27,36 +27,37 @@ pub(crate) fn expand(input: TokenStream) -> syn::Result<TokenStream> {
     let module_ident = format_ident!("{}", entity_name);
 
     let fields = struct_fields(&derive)?;
-    let mut accessors: Vec<TokenStream> = Vec::new();
-    let mut read_arms: Vec<TokenStream> = Vec::new();
+    let (accessors, read_arms): (Vec<TokenStream>, Vec<TokenStream>) = fields
+        .into_iter()
+        .map(|field| {
+            let name_ident = field.ident.as_ref().ok_or_else(|| {
+                syn::Error::new_spanned(field, "tuple structs are not supported")
+            })?;
+            let name_str = name_ident.to_string();
+            let mapping = type_mapping(&field.ty)?;
+            let tag = format_ident!("{}", mapping.tag);
+            let slot = format_ident!("{}", mapping.slot_variant);
+            let entity_lit = entity_name.clone();
+            let name_lit = name_str.clone();
 
-    for field in fields {
-        let name_ident = field
-            .ident
-            .as_ref()
-            .ok_or_else(|| syn::Error::new_spanned(field, "tuple structs are not supported"))?;
-        let name_str = name_ident.to_string();
-        let mapping = type_mapping(&field.ty)?;
-        let tag = format_ident!("{}", mapping.tag);
-        let slot = format_ident!("{}", mapping.slot_variant);
-        let entity_lit = entity_name.clone();
-        let name_lit = name_str.clone();
-
-        accessors.push(quote! {
-            #[doc = concat!("Typed AST reference to `", #struct_ident_str, ".", #name_lit, "`.")]
-            pub fn #name_ident()
-                -> ::nuke::policy::ast::Expr<::nuke::policy::ast::#tag>
-            {
-                ::nuke::policy::ast::field::<::nuke::policy::ast::#tag>(#entity_lit, #name_lit)
-            }
-        });
-
-        read_arms.push(quote! {
-            #name_lit => ::core::option::Option::Some(
-                ::nuke::policy::SlotValue::#slot(self.#name_ident.clone())
-            ),
-        });
-    }
+            let accessor = quote! {
+                #[doc = concat!("Typed AST reference to `", #struct_ident_str, ".", #name_lit, "`.")]
+                pub fn #name_ident()
+                    -> ::nuke::policy::ast::Expr<::nuke::policy::ast::#tag>
+                {
+                    ::nuke::policy::ast::field::<::nuke::policy::ast::#tag>(#entity_lit, #name_lit)
+                }
+            };
+            let read_arm = quote! {
+                #name_lit => ::core::option::Option::Some(
+                    ::nuke::policy::SlotValue::#slot(self.#name_ident.clone())
+                ),
+            };
+            Ok::<_, syn::Error>((accessor, read_arm))
+        })
+        .collect::<syn::Result<Vec<_>>>()?
+        .into_iter()
+        .unzip();
 
     Ok(quote! {
         #[doc = concat!("Typed accessors for the `", #struct_ident_str, "` domain entity.")]
@@ -154,16 +155,17 @@ fn map_ident(ident: &Ident) -> Option<TypeMapping> {
 }
 
 fn to_snake_case(camel: &str) -> String {
-    let mut out = String::with_capacity(camel.len() * 2);
-    for (index, char) in camel.chars().enumerate() {
-        if char.is_uppercase() {
-            if index != 0 {
-                out.push('_');
-            }
-            out.extend(char.to_lowercase());
-        } else {
-            out.push(char);
-        }
-    }
-    out
+    camel
+        .chars()
+        .enumerate()
+        .flat_map(|(index, char)| {
+            let lead = (index != 0 && char.is_uppercase()).then_some('_');
+            let lowered: Box<dyn Iterator<Item = char>> = if char.is_uppercase() {
+                Box::new(char.to_lowercase())
+            } else {
+                Box::new(std::iter::once(char))
+            };
+            lead.into_iter().chain(lowered)
+        })
+        .collect()
 }
