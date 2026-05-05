@@ -20,6 +20,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        check:
+        - workspace-build
+        - workspace-test
+        - workspace-clippy
+        - pre-commit
         os: [ubuntu-latest]
 
     steps:
@@ -28,14 +33,9 @@ jobs:
     - uses: DeterminateSystems/magic-nix-cache-action@main
     - uses: DeterminateSystems/flake-checker-action@main
 
-    - name: Run Flake checks
-      run: nix -v flake check --show-trace --impure --accept-flake-config
-
-    - name: cargo build
-      run: nix develop --impure --accept-flake-config -c cargo build --all-targets --locked
-
-    - name: cargo test
-      run: nix develop --impure --accept-flake-config -c cargo test --all-targets --locked
-
-    - name: cargo clippy
-      run: nix develop --impure --accept-flake-config -c cargo clippy --all-targets --locked -- -D warnings
+    # Build each check derivation directly via `nix build`. Avoids
+    # `nix flake check` (which evaluates devenv's `--impure`-only
+    # devShell) and lets each crane derivation cache independently in
+    # the nix binary cache.
+    - name: "build check: ${{ matrix.check }}"
+      run: nix build --accept-flake-config --print-build-logs ".#checks.x86_64-linux.${{ matrix.check }}"

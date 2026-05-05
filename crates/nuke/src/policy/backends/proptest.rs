@@ -34,41 +34,33 @@ pub struct TestPlan {
 
 /// Walk a rule and emit the plan.
 pub fn plan<A>(rule: &RuleNode<A>) -> TestPlan {
-    let mut branches = Vec::new();
-    walk(rule, &mut branches);
-    TestPlan { branches }
+    TestPlan {
+        branches: walk(rule),
+    }
 }
 
-fn walk<A>(rule: &RuleNode<A>, branches: &mut Vec<LeafBranch>) {
+fn walk<A>(rule: &RuleNode<A>) -> Vec<LeafBranch> {
     match rule {
         RuleNode::RejectIf {
             rule, condition, ..
-        } => {
-            branches.push(LeafBranch {
-                rule: *rule,
-                kind: BranchKind::Reject,
-                condition: render_condition(condition),
-            });
-        }
+        } => vec![LeafBranch {
+            rule: *rule,
+            kind: BranchKind::Reject,
+            condition: render_condition(condition),
+        }],
         RuleNode::EscalateIf {
             rule, condition, ..
-        } => {
-            branches.push(LeafBranch {
-                rule: *rule,
-                kind: BranchKind::Escalate,
-                condition: render_condition(condition),
-            });
-        }
-        RuleNode::Given { then, .. } | RuleNode::Bind { then, .. } => walk(then, branches),
-        RuleNode::All(rules) | RuleNode::Any(rules) => {
-            for sub in rules {
-                walk(sub, branches);
-            }
-        }
+        } => vec![LeafBranch {
+            rule: *rule,
+            kind: BranchKind::Escalate,
+            condition: render_condition(condition),
+        }],
+        RuleNode::Given { then, .. } | RuleNode::Bind { then, .. } => walk(then),
+        RuleNode::All(rules) | RuleNode::Any(rules) => rules.iter().flat_map(walk).collect(),
         // `Run` carries no predicate, so it is not a fuzz target;
         // the proptest planner only generates inputs that exercise
         // verdict-producing leaves.
-        RuleNode::Do(_) => {}
+        RuleNode::Do(_) => Vec::new(),
     }
 }
 

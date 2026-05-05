@@ -25,7 +25,9 @@ use std::sync::Arc;
 use alloy_sol_types::sol;
 use evm::{EvmSubject, EvmWsSource};
 use nuke::prelude::*;
-use nuke::{Job, Label};
+use nuke::{Job, Label, Validator, validate};
+
+mod verbs;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
 use serde::{Deserialize, Serialize};
@@ -127,12 +129,43 @@ impl Job<ArbCtx> for ArbJob {
     }
 }
 
+/// Pre-trade [`Validator`] that gates an opportunity behind a gas
+/// budget: if the detected edge (in bps) doesn't exceed the
+/// estimated gas overhead (also bps-equivalent), the opportunity is
+/// `Refused` with a typed reason so the reactor can log it without
+/// firing the action job.
+pub struct ProfitFilter {
+    pub gas_budget_bps: i64,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ProfitFilterReason {
+    EdgeBelowGas { edge_bps: i64, gas_budget_bps: i64 },
+}
+
+impl Validator<Opportunity> for ProfitFilter {
+    type Reason = ProfitFilterReason;
+
+    fn check(&self, opp: &Opportunity) -> Result<(), Self::Reason> {
+        if opp.edge_bps <= self.gas_budget_bps {
+            Err(ProfitFilterReason::EdgeBelowGas {
+                edge_bps: opp.edge_bps,
+                gas_budget_bps: self.gas_budget_bps,
+            })
+        } else {
+            Ok(())
+        }
+    }
+}
+
 /// The reactor. Holds the per-pool reserve state under a single
 /// mutex (writes are infrequent - no contention concern at this
-/// scale). `react` is a pure decider: it updates state and returns
-/// any jobs the framework should enqueue.
+/// scale). `react` is a pure decider: it updates state, runs the
+/// pre-trade [`ProfitFilter`], and returns a job only when the
+/// opportunity clears the gas budget.
 pub struct ArbBot {
     threshold_bps: i64,
+    profit_filter: ProfitFilter,
     state: Mutex<State>,
 }
 
@@ -143,10 +176,28 @@ struct State {
 }
 
 impl ArbBot {
-    pub fn new(threshold_bps: i64) -> Self {
+    pub fn new(threshold_bps: i64, gas_budget_bps: i64) -> Self {
         Self {
             threshold_bps,
+            profit_filter: ProfitFilter { gas_budget_bps },
             state: Mutex::new(State::default()),
+        }
+    }
+
+    /// Run the candidate opportunity through the pre-trade
+    /// [`ProfitFilter`]. On `Approved`, emit the action job; on
+    /// `Refused`, log the typed reason and emit nothing.
+    fn gate(&self, opp: Opportunity) -> Vec<ArbJob> {
+        match validate(&self.profit_filter, opp) {
+            Ok(approved) => vec![ArbJob::Log(approved.into_inner())],
+            Err(refused) => {
+                ::tracing::debug!(
+                    edge_bps = refused.input.edge_bps,
+                    reason = ?refused.reason,
+                    "opportunity below gas budget; skipping",
+                );
+                Vec::new()
+            }
         }
     }
 
@@ -160,9 +211,8 @@ impl ArbBot {
             Pool::UniV2,
             Pool::Sushi,
         )
-        .into_iter()
-        .map(ArbJob::Log)
-        .collect()
+        .map(|opp| self.gate(opp))
+        .unwrap_or_default()
     }
 
     async fn on_sushi(&self, _id: SushiV2WethUsdcId, sync: UniswapV2Pair::Sync) -> Vec<ArbJob> {
@@ -175,9 +225,8 @@ impl ArbBot {
             Pool::Sushi,
             Pool::UniV2,
         )
-        .into_iter()
-        .map(ArbJob::Log)
-        .collect()
+        .map(|opp| self.gate(opp))
+        .unwrap_or_default()
     }
 }
 
@@ -234,6 +283,23 @@ fn check(
 async fn main() -> nuke::Result<()> {
     nuke::tracing::init();
 
+    // Log the verb KINDs the strategy compiler can lower for this
+    // example. Once the per-node verdict-layer decomposition lands,
+    // these show up wired into the apalis DAG; today they exist as
+    // typed Action surfaces so a strategy author can construct
+    // `policy! { ... do Buy { ... } }` trees that compile.
+    use nuke::policy::Action;
+    use verbs::{Buy, Sell, Short, Transfer};
+    ::tracing::info!(
+        verbs = ?[
+            <Buy::<evm::EvmRpcVenue> as Action>::KIND,
+            <Sell::<evm::EvmRpcVenue> as Action>::KIND,
+            <Short::<evm::EvmRpcVenue> as Action>::KIND,
+            <Transfer::<evm::EvmChain, evm::EvmChain> as Action>::KIND,
+        ],
+        "registered verbs",
+    );
+
     let secrets = SecretSpec::builder()
         .load()
         .map_err(|error| nuke::Error::msg(format!("secretspec load failed: {error}")))?;
@@ -243,7 +309,8 @@ async fn main() -> nuke::Result<()> {
         .ok_or_else(|| nuke::Error::msg("ETH_WS_RPC_URL not set"))?;
 
     let chain = EvmWsSource::connect(&url).await?;
-    let bot = Arc::new(ArbBot::new(20));
+    // 20 bps detection threshold, 5 bps gas budget the opportunity has to clear.
+    let bot = Arc::new(ArbBot::new(20, 5));
     let ctx = Arc::new(ArbCtx);
 
     evm::pump(chain, bot, ctx).await

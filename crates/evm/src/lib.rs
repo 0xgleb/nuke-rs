@@ -23,8 +23,10 @@ mod dispatch;
 mod subject;
 mod subscription;
 mod transport;
+mod venue;
 
 pub use dispatch::Dispatcher;
+pub use venue::{EvmChain, EvmRpcVenue, EvmVenue, EvmVenueError, EvmVenueId};
 // Both the trait and the derive macro are exported as `EvmSubject` -
 // they live in different namespaces (type vs macro) so Rust resolves
 // `impl EvmSubject for ...` (trait) and `#[derive(EvmSubject)]` (macro)

@@ -39,6 +39,8 @@ mod feed;
 mod identifier;
 mod ledger;
 mod lifecycle;
+mod order;
+mod pump;
 mod reactor;
 mod review;
 mod stream_ext;
@@ -71,6 +73,8 @@ pub use feed::{Feed, FeedStream};
 pub use job::{Job, Label, work};
 pub use ledger::Ledger;
 pub use nuke_derive::Domain;
+pub use order::{Inventory, InventoryEntry, Order, OrderId, OrderRequest, OrderState};
+pub use pump::{DepStream, inject_ext_stream, pump_dep_streams};
 pub use reactor::Reactor;
 pub use review::{Approved, Processor, Refused, Validator, validate};
 pub use subject::Subject;
@@ -95,5 +99,5 @@ pub mod prelude {
     pub use crate::reactor::Reactor;
     pub use crate::subject::Subject;
     pub use async_trait::async_trait;
-    pub use event_sorcery::{Cons, DepList, Dependent, Fold, HasDep, Never, Nil, OneOf, deps};
+    pub use event_sorcery::{Cons, Dep, DepList, Dependent, Fold, HasDep, Never, Nil, OneOf, deps};
 }
