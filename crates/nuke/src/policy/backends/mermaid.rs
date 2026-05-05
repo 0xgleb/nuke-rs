@@ -82,6 +82,23 @@ fn walk(rule: &RuleNode, prev: String, counter: &mut usize, out: &mut String) ->
             writeln!(out, "    {prev} --> {id}").ok();
             walk(then, id, counter, out)
         }
+        RuleNode::Run(spec) => {
+            let id = next_id(counter);
+            let captures = spec
+                .captures
+                .iter()
+                .map(|name| format!("${name}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            writeln!(
+                out,
+                "    {id}[[{}]]",
+                escape(&format!("run {} [{captures}]", spec.label)),
+            )
+            .ok();
+            writeln!(out, "    {prev} --> {id}").ok();
+            id
+        }
     }
 }
 

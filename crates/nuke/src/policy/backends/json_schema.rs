@@ -111,6 +111,9 @@ fn walk_rule(rule: &RuleNode, fields: &mut BTreeMap<String, FieldShape>) {
             walk_expr(expr, fields);
             walk_rule(then, fields);
         }
+        // `Run` references slots already bound earlier in the rule,
+        // so it adds no new field requirements to the input schema.
+        RuleNode::Run(_) => {}
     }
 }
 

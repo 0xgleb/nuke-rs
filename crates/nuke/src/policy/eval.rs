@@ -12,13 +12,15 @@
 //! recursive switch on variants. Type safety happened at construction
 //! time in [`crate::policy::ast`].
 
+use std::collections::BTreeMap;
+
 use rust_decimal::Decimal;
 
 use crate::policy::ast::{
-    BinOp, BinOpExpr, CmpExpr, CmpOp, FieldRef, InnerExpr, LitValue, RuleNode,
+    ActionSpec, BinOp, BinOpExpr, CmpExpr, CmpOp, FieldRef, InnerExpr, LitValue, RuleNode,
 };
 use crate::policy::capability::Context;
-use crate::policy::decision::Decision;
+use crate::policy::decision::{Decision, Outcome, QueuedAction};
 use crate::policy::reason::{Bindings, SlotValue};
 
 /// Errors the evaluator can produce. Most of these are "the rule
@@ -39,17 +41,30 @@ pub enum EvalError {
     },
 }
 
-/// Run a rule against a context. Captures evaluation bindings into the
-/// returned `Decision` on `Deny`/`Escalate`.
-pub fn evaluate<C: Context>(rule: &RuleNode, ctx: &C) -> Result<Decision, EvalError> {
+/// Run a rule against a context. Returns the verdict plus any
+/// side-effect actions queued by [`RuleNode::Run`] leaves reached on
+/// the way to that verdict; if the verdict is `Deny` or `Escalate`,
+/// the action list is empty (an action is only queued once a leaf is
+/// reached without short-circuit).
+pub fn evaluate<C: Context>(rule: &RuleNode, ctx: &C) -> Result<Outcome, EvalError> {
     let mut bindings = Bindings::empty();
-    eval_rule(rule, ctx, &mut bindings)
+    let mut actions: Vec<QueuedAction> = Vec::new();
+    let decision = eval_rule(rule, ctx, &mut bindings, &mut actions)?;
+    Ok(if decision.is_allow() {
+        Outcome::allow_with(actions)
+    } else {
+        Outcome {
+            decision,
+            actions: Vec::new(),
+        }
+    })
 }
 
 fn eval_rule<C: Context>(
     rule: &RuleNode,
     ctx: &C,
     bindings: &mut Bindings,
+    actions: &mut Vec<QueuedAction>,
 ) -> Result<Decision, EvalError> {
     match rule {
         RuleNode::Given { conditions, then } => {
@@ -58,7 +73,7 @@ fn eval_rule<C: Context>(
                     return Ok(Decision::Allow);
                 }
             }
-            eval_rule(then, ctx, bindings)
+            eval_rule(then, ctx, bindings, actions)
         }
         RuleNode::RejectIf {
             rule,
@@ -99,7 +114,7 @@ fn eval_rule<C: Context>(
             // them. The names exist so the markdown and SMT backends
             // can still differentiate the author's intent.
             for sub in rules {
-                let decision = eval_rule(sub, ctx, bindings)?;
+                let decision = eval_rule(sub, ctx, bindings, actions)?;
                 if !decision.is_allow() {
                     return Ok(decision);
                 }
@@ -109,9 +124,30 @@ fn eval_rule<C: Context>(
         RuleNode::Bind { name, expr, then } => {
             let value = eval_expr(expr, ctx, bindings)?;
             bindings.capture(*name, value);
-            eval_rule(then, ctx, bindings)
+            eval_rule(then, ctx, bindings, actions)
+        }
+        RuleNode::Run(spec) => {
+            actions.push(queue_action(spec, bindings)?);
+            Ok(Decision::Allow)
         }
     }
+}
+
+fn queue_action(spec: &ActionSpec, bindings: &Bindings) -> Result<QueuedAction, EvalError> {
+    let payload: BTreeMap<_, _> = spec
+        .captures
+        .iter()
+        .map(|name| {
+            bindings
+                .get(*name)
+                .map(|value| (*name, value.clone()))
+                .ok_or(EvalError::UnboundSlot(name.0))
+        })
+        .collect::<Result<_, _>>()?;
+    Ok(QueuedAction {
+        label: spec.label.clone(),
+        payload,
+    })
 }
 
 fn eval_expr<C: Context>(
@@ -383,8 +419,8 @@ mod tests {
             side: Side::Buy,
             price: Px::new(d(100)),
         };
-        let decision = evaluate(&rule, &ctx).unwrap();
-        match decision {
+        let outcome = evaluate(&rule, &ctx).unwrap();
+        match outcome.decision {
             Decision::Deny { bindings, .. } => {
                 assert_eq!(
                     bindings.get(SlotName("requested")),
@@ -417,8 +453,8 @@ mod tests {
             side: Side::Buy,
             price: Px::new(d(7)),
         };
-        let decision = evaluate(&rule, &ctx).unwrap();
-        match decision {
+        let outcome = evaluate(&rule, &ctx).unwrap();
+        match outcome.decision {
             Decision::Deny { bindings, .. } => {
                 assert_eq!(
                     bindings.get(SlotName("notional")),

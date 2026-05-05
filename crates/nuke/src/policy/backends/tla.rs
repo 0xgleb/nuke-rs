@@ -45,6 +45,10 @@ fn rule_to_tla(rule: &RuleNode) -> String {
             .collect::<Vec<_>>()
             .join(" \\/ "),
         RuleNode::Bind { then, .. } => rule_to_tla(then),
+        // `Run` is not a logical assertion. It contributes `TRUE` to
+        // the predicate so the surrounding conjunction / disjunction
+        // structure stays well-formed.
+        RuleNode::Run(_) => "TRUE".to_string(),
     }
 }
 

@@ -65,6 +65,10 @@ fn walk(rule: &RuleNode, branches: &mut Vec<LeafBranch>) {
                 walk(sub, branches);
             }
         }
+        // `Run` carries no predicate, so it is not a fuzz target;
+        // the proptest planner only generates inputs that exercise
+        // verdict-producing leaves.
+        RuleNode::Run(_) => {}
     }
 }
 

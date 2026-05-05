@@ -95,7 +95,7 @@ pub struct Slot {
 
 /// Stable name for a slot. `&'static str` so backends can compare and
 /// index by reference equality.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 pub struct SlotName(pub &'static str);
 
 impl std::fmt::Display for SlotName {

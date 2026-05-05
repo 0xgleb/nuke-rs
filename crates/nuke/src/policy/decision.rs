@@ -5,9 +5,12 @@
 //! types that don't appear here can't be returned by a rule, which keeps
 //! every backend's match exhaustive.
 
+use std::collections::BTreeMap;
+
 use serde::Serialize;
 
-use crate::policy::reason::{Bindings, Reason};
+use crate::job::Label;
+use crate::policy::reason::{Bindings, Reason, SlotName, SlotValue};
 
 /// What a rule decides about an input.
 ///
@@ -48,6 +51,83 @@ impl Decision {
     pub fn is_escalate(&self) -> bool {
         matches!(self, Self::Escalate { .. })
     }
+}
+
+/// Full result of evaluating a rule: the verdict plus any side-effect
+/// actions queued by [`crate::policy::ast::RuleNode::Run`] leaves
+/// reached during the walk.
+///
+/// The runtime evaluator returns this; the DAG compiler compiles to
+/// the same shape (verdict-then-actions) but executes each action as
+/// its own apalis node so retries / persistence are per-action.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Outcome {
+    pub decision: Decision,
+    pub actions: Vec<QueuedAction>,
+}
+
+impl Outcome {
+    pub fn allow() -> Self {
+        Self {
+            decision: Decision::Allow,
+            actions: Vec::new(),
+        }
+    }
+
+    pub fn allow_with(actions: Vec<QueuedAction>) -> Self {
+        Self {
+            decision: Decision::Allow,
+            actions,
+        }
+    }
+
+    pub fn deny(rule: RuleId, reason: Reason, bindings: Bindings) -> Self {
+        Self {
+            decision: Decision::Deny {
+                rule,
+                reason,
+                bindings,
+            },
+            actions: Vec::new(),
+        }
+    }
+
+    pub fn escalate(
+        rule: RuleId,
+        to: EscalationTarget,
+        reason: Reason,
+        bindings: Bindings,
+    ) -> Self {
+        Self {
+            decision: Decision::Escalate {
+                rule,
+                to,
+                reason,
+                bindings,
+            },
+            actions: Vec::new(),
+        }
+    }
+
+    pub fn is_allow(&self) -> bool {
+        self.decision.is_allow()
+    }
+    pub fn is_deny(&self) -> bool {
+        self.decision.is_deny()
+    }
+    pub fn is_escalate(&self) -> bool {
+        self.decision.is_escalate()
+    }
+}
+
+/// A side-effect action enqueued by [`crate::policy::ast::RuleNode::Run`].
+///
+/// `label` names the [`crate::Job`] to invoke; `payload` is the snapshot
+/// of slot values captured at the moment the `Run` leaf was reached.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QueuedAction {
+    pub label: Label,
+    pub payload: BTreeMap<SlotName, SlotValue>,
 }
 
 /// Stable identifier for a rule. Interned `&'static str` so equality is

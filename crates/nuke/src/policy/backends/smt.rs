@@ -56,6 +56,9 @@ fn collect_decls(rule: &RuleNode, into: &mut BTreeSet<String>) {
             collect_expr_decls(expr, into);
             collect_decls(then, into);
         }
+        // `Run` references slots already declared by upstream `Bind`s
+        // and contributes no new field declarations of its own.
+        RuleNode::Run(_) => {}
     }
 }
 
@@ -111,6 +114,10 @@ fn rule_to_smt(rule: &RuleNode) -> String {
             )
         }
         RuleNode::Bind { then, .. } => rule_to_smt(then),
+        // `Run` is not a constraint - the SMT proposition for an
+        // action node is "true" (this branch is satisfiable iff its
+        // upstream gates are).
+        RuleNode::Run(_) => "true".to_string(),
     }
 }
 
