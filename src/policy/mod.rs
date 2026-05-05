@@ -11,6 +11,7 @@
 //! - [`RuleId`] — interned `&'static str` rule identifier.
 
 pub mod ast;
+pub mod backends;
 pub mod capability;
 mod decision;
 pub mod eval;

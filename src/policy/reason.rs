@@ -8,6 +8,7 @@
 //! `Bindings`, which a runtime evaluator populates as it walks the rule.
 
 use rust_decimal::Decimal;
+use serde::Serialize;
 
 use crate::domain::{Notional, Px, Qty, Side, Symbol};
 
@@ -18,7 +19,7 @@ use crate::domain::{Notional, Px, Qty, Side, Symbol};
 /// Backends choose how to render — markdown can interpolate, CBOR
 /// preserves both template and slot values, semantic diff compares
 /// templates structurally.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Reason {
     pub template: ReasonTemplate,
     pub slots: Vec<Slot>,
@@ -64,7 +65,7 @@ impl Reason {
 /// The structured template a [`Reason`] expands. Keeps backends able to
 /// distinguish "literal text the rule author wrote" from "values
 /// captured at evaluation time."
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum ReasonTemplate {
     /// No interpolation — the message is exactly the literal text.
     Literal(&'static str),
@@ -78,7 +79,7 @@ pub enum ReasonTemplate {
 }
 
 /// One element of a templated reason.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum ReasonChunk {
     Literal(&'static str),
     Slot(SlotName),
@@ -86,7 +87,7 @@ pub enum ReasonChunk {
 
 /// A named slot in a [`Reason`] template, paired with its evaluated
 /// value at runtime.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Slot {
     pub name: SlotName,
     pub value: SlotValue,
@@ -94,7 +95,7 @@ pub struct Slot {
 
 /// Stable name for a slot. `&'static str` so backends can compare and
 /// index by reference equality.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub struct SlotName(pub &'static str);
 
 impl std::fmt::Display for SlotName {
@@ -109,7 +110,7 @@ impl std::fmt::Display for SlotName {
 /// slot values is intentionally a deliberate change here, not free-form
 /// `String` interpolation. New variants must be added when new domain
 /// primitives appear.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum SlotValue {
     Bool(bool),
     Decimal(Decimal),

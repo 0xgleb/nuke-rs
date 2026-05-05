@@ -19,6 +19,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use rust_decimal::Decimal;
+use serde::Serialize;
 
 use crate::domain::{Notional, Px, Qty, Side, Symbol};
 use crate::policy::decision::{EscalationTarget, RuleId};
@@ -273,7 +274,7 @@ pub fn notional_div_px(notional: Expr<NotionalT>, price: Expr<PxT>) -> Expr<QtyT
 /// Type-erased AST node. Every typed [`Expr<T>`] reduces to this enum
 /// once the typed-constructor layer has done its job; backends fold
 /// over `InnerExpr` directly without caring about `T`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum InnerExpr {
     Lit(LitValue),
     Field(FieldRef),
@@ -288,7 +289,7 @@ pub enum InnerExpr {
 }
 
 /// A literal value of any supported domain type.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum LitValue {
     Bool(bool),
     Decimal(Decimal),
@@ -302,21 +303,21 @@ pub enum LitValue {
 
 /// Reference to a registered field on a domain entity. Looked up at
 /// eval time through the context.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub struct FieldRef {
     pub entity: &'static str,
     pub name: &'static str,
 }
 
 /// A binary comparison node (always yields `Bool`).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct CmpExpr {
     pub op: CmpOp,
     pub lhs: Box<InnerExpr>,
     pub rhs: Box<InnerExpr>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub enum CmpOp {
     Eq,
     Ne,
@@ -327,14 +328,14 @@ pub enum CmpOp {
 }
 
 /// A binary arithmetic node.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct BinOpExpr {
     pub op: BinOp,
     pub lhs: Box<InnerExpr>,
     pub rhs: Box<InnerExpr>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub enum BinOp {
     Add,
     Sub,
@@ -348,7 +349,7 @@ pub enum BinOp {
 
 /// Control-flow node above the predicate layer. Folds over `RuleNode`
 /// evaluate to a [`Decision`](crate::policy::Decision).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum RuleNode {
     /// Guard: only evaluate `then` when *every* `condition` holds.
     /// When a guard fails, the rule short-circuits to `Allow` (the

@@ -5,6 +5,8 @@
 //! types that don't appear here can't be returned by a rule, which keeps
 //! every backend's match exhaustive.
 
+use serde::Serialize;
+
 use crate::policy::reason::{Bindings, Reason};
 
 /// What a rule decides about an input.
@@ -54,7 +56,7 @@ impl Decision {
 /// IDs are registered at startup via the rule registry (lands with the
 /// `policy!` macro epic). Creating a `RuleId` directly bypasses that
 /// registry — only do it from generated code.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
 pub struct RuleId(&'static str);
 
 impl RuleId {
@@ -79,7 +81,7 @@ impl std::fmt::Display for RuleId {
 /// Where an `Escalate` decision should be routed (e.g. `"compliance"`,
 /// `"risk-desk"`, `"manual-review"`). Backends decide what to do with
 /// the target — the rule itself just names it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub struct EscalationTarget(&'static str);
 
 impl EscalationTarget {

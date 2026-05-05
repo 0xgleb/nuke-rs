@@ -20,13 +20,14 @@ use std::fmt;
 use std::ops::{Add, Sub};
 
 use rust_decimal::Decimal;
+use serde::{Deserialize, Serialize};
 
 /// Opaque instrument identifier — e.g. `"BTC-USD"`, `"WETH/USDC"`. Wrap
 /// once at the boundary; callers never touch the raw string.
 ///
 /// String-backed in v0; switch to interned `&'static str` once the rule
 /// registry needs it.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Symbol(String);
 
 impl Symbol {
@@ -47,7 +48,7 @@ impl fmt::Display for Symbol {
 
 /// Trade side. Discriminated union, never `bool` — boolean blindness at
 /// call sites obscures direction.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Side {
     Buy,
     Sell,
@@ -73,7 +74,7 @@ impl fmt::Display for Side {
 
 /// A price expressed as a quote-currency amount per unit base. Always
 /// `Decimal` — never `f64`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Px(Decimal);
 
 impl Px {
@@ -98,7 +99,7 @@ impl fmt::Display for Px {
 
 /// A quantity — a count of base-currency units (e.g. shares, tokens, lots).
 /// Always `Decimal`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Qty(Decimal);
 
 impl Qty {
@@ -137,7 +138,7 @@ impl Sub for Qty {
 
 /// A money amount — quote-currency denominated value (e.g. `$1234.56` of
 /// USDC). Always `Decimal`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Notional(Decimal);
 
 impl Notional {
