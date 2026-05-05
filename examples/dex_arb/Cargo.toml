@@ -12,7 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 nuke.workspace = true
-evm = { path = "../../adapters/evm", version = "0.1.0" }
+evm = { path = "../../crates/evm", version = "0.1.0" }
 
 # secretspec_derive expansion needs serde + serde_json visible in the
 # dependent crate.

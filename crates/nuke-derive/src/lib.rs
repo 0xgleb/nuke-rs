@@ -7,7 +7,7 @@
 //!
 //! Venue-specific derives (e.g. `#[derive(EvmSubject)]`) live in
 //! adapter crates next to the venue trait they implement (see
-//! `adapters/evm-derive`).
+//! `crates/evm-derive`).
 
 use proc_macro::TokenStream;
 

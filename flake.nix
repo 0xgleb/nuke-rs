@@ -34,9 +34,10 @@
 
         hooks = {
           actionlint.enable = true;
-          taplo.enable = true;
+          denofmt.enable = true;
           nixfmt.enable = true;
 
+          taplo.enable = true;
           rustfmt = {
             enable = true;
             packageOverrides = { inherit (toolchain) cargo rustfmt; };
