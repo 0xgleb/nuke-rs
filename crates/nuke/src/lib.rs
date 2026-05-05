@@ -1,20 +1,22 @@
-//! nuke — general-purpose, event-driven framework. Source → cqrs/es →
-//! Reactor → apalis Job DAG → external services. The framework crate
-//! defines the abstract traits + the eDSL + the apalis run-loop +
-//! cqrs/es bridge, and is venue-agnostic — EVM/SVM/CEX adapters live
-//! in sibling crates (e.g. `evm`).
+//! nuke - general-purpose, event-driven framework. Source -> cqrs/es
+//! -> Reactor -> apalis Job DAG -> external services. The framework
+//! crate defines the abstract traits + the eDSL + the apalis run-loop,
+//! and is venue-agnostic - EVM/SVM/CEX adapters live in sibling
+//! crates (e.g. `evm`); persistence lives in the `event-sorcery`
+//! crate.
 //!
-//! See `CLAUDE.md` and `docs/architecture.md` at the repo root for the
-//! durable architectural reference. Public vocabulary at a glance:
+//! See `CLAUDE.md` and `docs/architecture.md` at the repo root for
+//! the durable architectural reference. Public vocabulary at a
+//! glance:
 //!
-//! - [`Subject`] — typed marker for an event source the reactor cares
-//!   about. Adapter crates extend it (e.g. `evm::EvmSubject`) with
-//!   venue-specific subscription / decode methods.
-//! - [`Reactor`] — what reacts to events from a *list* of subjects;
+//! - [`Subject`] - typed marker for an event source the reactor
+//!   cares about. Adapter crates extend it (e.g. `evm::EvmSubject`)
+//!   with venue-specific subscription / decode methods.
+//! - [`Reactor`] - what reacts to events from a *list* of subjects;
 //!   the event type is *computed* from the list (no manual enum).
-//! - [`subjects!`] — declares a reactor's subject list once and
+//! - [`subjects!`] - declares a reactor's subject list once and
 //!   generates the [`Subscribed`] / [`HasSubject`] impls.
-//! - [`pump_through_apalis`](apalis::pump_through_apalis) — the
+//! - [`pump_through_apalis`](apalis::pump_through_apalis) - the
 //!   venue-agnostic run loop adapter crates feed.
 
 // Make `::nuke::*` paths in proc-macro-emitted code resolve when used
@@ -25,7 +27,6 @@ extern crate self as nuke;
 pub mod apalis;
 pub mod domain;
 pub mod error;
-pub mod persist;
 pub mod policy;
 pub mod tracing;
 

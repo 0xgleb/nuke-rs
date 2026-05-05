@@ -1,5 +1,5 @@
 //! The [`subjects!`] declarative macro and its `register_subjects!`
-//! helper. Mirrors event-sorcery's `deps!` / `register_entities!`.
+//! helper.
 //!
 //! Two forms, distinguished by syntax:
 //!

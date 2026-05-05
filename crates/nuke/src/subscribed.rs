@@ -1,11 +1,9 @@
 //! Type-level subject lists and the computed event union.
 //!
-//! Mirrors the `Cons`/`Nil`/`Never`/`EntityList` machinery from
-//! event-sorcery's `dependency.rs`. A reactor declares its
-//! [`Subscribed::Subjects`] as a `Cons<A, Cons<B, Nil>>` (usually via
-//! the [`subjects!`](crate::subjects) macro). The matching
-//! [`SubjectList::Event`] is a discriminated union built from each
-//! subject's `(Id, Event)`.
+//! A reactor declares its [`Subscribed::Subjects`] as a
+//! `Cons<A, Cons<B, Nil>>` (usually via the [`subjects!`](crate::subjects)
+//! macro). The matching [`SubjectList::Event`] is a discriminated union
+//! built from each subject's `(Id, Event)`.
 
 use std::marker::PhantomData;
 

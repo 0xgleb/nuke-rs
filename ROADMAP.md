@@ -105,16 +105,13 @@ had from day one.
 - [ ] `TradingVenue<...>` trait (parameterized over the venue's order/fill/quote
       types) — outbound side. EVM (signed tx → RPC), CEX REST, paper-trading
       sandbox are _implementations_.
-- [ ] `Job<Ctx>` trait modeled on
-      [`~/code/st0x/st0x.liquidity/src/conductor/job.rs`](CLAUDE.md):
-      `Serialize + DeserializeOwned + Send + 'static` with `label()` and
-      `async fn perform(&self, ctx: &Ctx)`. Generic `work::<Ctx,
-      J>`
-      apalis handler with `backon` retries.
+- [ ] `Job<Ctx>` trait: `Serialize + DeserializeOwned + Send + 'static` with
+      `label()` and `async fn perform(&self, ctx: &Ctx)`. Generic
+      `work::<Ctx, J>` apalis handler with `backon` retries.
 - [ ] Replace `EventSourced::Services` with the Ctx-injected Job pattern.
-- [ ] Borrow `Validator` and `Processor<Event>` traits from `barter-rs` (small,
-      generic, useful).
-- [ ] Borrow typed approve/refuse wrappers (`Approved<T>`, `Refused<T, Reason>`)
+- [ ] Add `Validator` + `Processor<Event>` traits (small, generic, useful for
+      audit trails).
+- [ ] Add typed approve/refuse wrappers (`Approved<T>`, `Refused<T, Reason>`)
       for policy results.
 
 ## Refactor Reactor: enqueue Jobs, not direct calls
@@ -278,7 +275,7 @@ Smaller follow-ups not big enough to be their own epic yet:
 - [ ] **12. Policy → apalis DAG compiler** — the killer feature. Lives in the
       "Compile policy! eDSL → apalis DAG" epic above, not here.
 
-## Completed: Persistence (cqrs-es, event-sorcery-style adapter)
+## Completed: Persistence (cqrs-es bridge, soon to split into `event-sorcery` crate)
 
 - [x] `nuke::persist::EventSourced` trait with rich associated types.
 - [x] Naming asymmetry: `originate`/`evolve` (event-side) vs

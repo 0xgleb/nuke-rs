@@ -2,8 +2,8 @@
 //! `eth_subscribe` per [`Subject`] and builds a runtime [`Dispatcher`]
 //! from per-subject decoder + `HasSubject::inject` closures.
 //!
-//! Mirrors the recursive `Cons<H, T>` traversal pattern used in
-//! event-sorcery, adapted for async subscription setup.
+//! Recursive traversal of the `Cons<H, T>` chain, adapted for async
+//! subscription setup.
 
 use std::collections::HashMap;
 use std::future::Future;

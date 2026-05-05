@@ -103,24 +103,6 @@ These are non-negotiable:
   crate has `src/lib.rs` (wiring) + `src/main.rs` (runner) with `#[cfg(test)]`
   modules in the lib for assertions / mocks. Run with `cargo test -p <name>`.
 
-## Reference repos
-
-These are _peer_ frameworks the user uses. Read them before designing analogous
-components here.
-
-- `~/code/st0x/st0x.liquidity/crates/event-sorcery/` - the cqrs/es-on-cqrs-es
-  adapter pattern (rich associated types, naming asymmetry `originate`/`evolve`
-  vs `initialize`/`transition`, typed aggregate IDs, schema reconciliation). Our
-  `nuke::persist` mirrors this.
-- `~/code/st0x/st0x.liquidity/src/conductor/job.rs` - the canonical `Job<Ctx>`
-  trait pattern with apalis + backon retries. The framework's job module mirrors
-  this.
-- `~/code/0xgleb/barter-rs/` - open-source Rust framework for event-driven
-  live-trading + backtesting. Workspace split worth studying. Borrow
-  `Validator`, `Processor<Event>`, `RiskApproved<T>` / `RiskRefused<T, Reason>`
-  patterns. Consider `barter-integration` as a transport dep if the fit is
-  clean.
-
 ## Workflow
 
 - _Plain `git`, never Graphite._ No `gt` commands here, including `gt ls` (which

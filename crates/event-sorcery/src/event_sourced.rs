@@ -29,8 +29,8 @@ impl<T> DomainError for T where
 /// The user-facing event-sourced entity trait.
 ///
 /// Implement this on a domain type to get a complete event-sourcing
-/// setup; [`Lifecycle`](crate::persist::Lifecycle) provides the
-/// blanket `cqrs_es::Aggregate` impl.
+/// setup; [`Lifecycle`](crate::Lifecycle) provides the blanket
+/// `cqrs_es::Aggregate` impl.
 #[async_trait]
 pub trait EventSourced: Clone + Debug + Send + Sync + Sized + Serialize + DeserializeOwned {
     /// Strongly-typed aggregate identifier. Prevents mixing IDs across
@@ -42,8 +42,7 @@ pub trait EventSourced: Clone + Debug + Send + Sync + Sized + Serialize + Deseri
     /// and transitions — the lifecycle routes by state.
     type Command: Send + Sync;
     /// Domain-specific errors from command handlers / event
-    /// application. Use [`crate::persist::Never`] for infallible
-    /// entities.
+    /// application. Use [`crate::Never`] for infallible entities.
     type Error: DomainError;
     /// External dependencies injected into command handlers (e.g.
     /// `Arc<dyn OrderPlacer>`). Use `()` when none are needed.
