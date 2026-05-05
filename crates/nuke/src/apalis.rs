@@ -1,10 +1,9 @@
 //! Internal adapter that drives a [`Reactor`] through apalis 1.x.
 //!
-//! The user implements `Reactor`. Internally, every decoded event flows
-//! through an apalis [`dequeue`-backed in-memory backend][dequeue::backend]
-//! via the [`PipeExt`] adapter, and is consumed by a [`WorkerBuilder`]-built
-//! worker that calls `reactor.react(...)` per task. The public API never
-//! names apalis types — `nuke::run` returns a future and that's it.
+//! Public API: [`pump_through_apalis`] — venue-agnostic. Takes a stream
+//! of typed events (the producer side is the venue's responsibility —
+//! e.g. `evm::pump` builds the stream from raw chain logs) and runs an
+//! apalis worker that hands each task to `reactor.react(...)`.
 //!
 //! The seam is intentional: switching the in-memory dequeue for a
 //! persistent backend (`apalis-sql`, `apalis-redis`) or composing
@@ -16,45 +15,34 @@ use std::time::Duration;
 
 use apalis::prelude::{BoxDynError, PipeExt, WorkerBuilder};
 use apalis_core::backend::dequeue;
-use futures_util::StreamExt;
-use tokio::sync::mpsc;
-use tokio_stream::wrappers::ReceiverStream;
+use futures_util::Stream;
 
 use crate::error::{Error, Result};
-use crate::evm::{Dispatcher, RawLog};
 use crate::reactor::Reactor;
 use crate::subscribed::SubjectList;
 
-/// Drive `reactor` to convergence: pull `RawLog`s from `log_stream`,
-/// dispatch each into the reactor's typed event union, push the result
-/// onto an apalis `dequeue` backend through `PipeExt::pipe_to`, and run
-/// an apalis `Worker` that hands each task to `reactor.react(...)`.
-pub(crate) async fn pump_through_apalis<R>(
-    log_stream: mpsc::Receiver<RawLog>,
-    dispatcher: Dispatcher<R::Subjects>,
-    reactor: Arc<R>,
-) -> Result<()>
+/// Drive `reactor` to convergence: consume `events` (typed event union
+/// matching the reactor's subject list), push each onto an apalis
+/// `dequeue` backend through `PipeExt::pipe_to`, and run an apalis
+/// `Worker` that hands each task to `reactor.react(...)`.
+///
+/// Venue-agnostic — the producer of the event stream is the adapter's
+/// concern (see e.g. `evm::pump` in the EVM adapter crate).
+pub async fn pump_through_apalis<R, S>(events: S, reactor: Arc<R>) -> Result<()>
 where
     R: Reactor + 'static,
     <R::Subjects as SubjectList>::Event: Clone + Send + Sync + 'static,
+    S: Stream<Item = std::result::Result<<R::Subjects as SubjectList>::Event, PipelineError>>
+        + Send
+        + Unpin
+        + 'static,
 {
-    let dispatcher = Arc::new(dispatcher);
-
-    let event_stream = ReceiverStream::new(log_stream).map({
-        let dispatcher = Arc::clone(&dispatcher);
-        move |log| {
-            dispatcher
-                .dispatch(&log)
-                .map_err(|error| ReactorPipelineError(error.to_string()))
-        }
-    });
-
     // Poll interval is the *empty-queue* backoff, not per-task latency:
     // when nothing is queued, the worker sleeps this long before checking
     // again. Tasks pushed via the pipe wake the worker promptly.
     let in_memory =
         dequeue::backend::<<R::Subjects as SubjectList>::Event>(Duration::from_millis(10));
-    let backend = event_stream.pipe_to(in_memory);
+    let backend = events.pipe_to(in_memory);
 
     let reactor_for_handler = Arc::clone(&reactor);
     let handler = move |event: <R::Subjects as SubjectList>::Event| {
@@ -76,10 +64,19 @@ where
     Ok(())
 }
 
-/// Tiny sized error type so the dispatch result can satisfy the
-/// `Stream<Item = Result<_, E: std::error::Error + Send + Sync>>` bound
-/// `PipeExt` requires. We log the underlying chain via `Display` and
-/// surface it through the worker's transport-error path.
+/// Sized error type for stream stages between a venue adapter and
+/// [`pump_through_apalis`]. Adapters wrap whatever decode / framing
+/// errors they have into this.
+///
+/// Required because `PipeExt` needs `Stream<Item = Result<_, E:
+/// std::error::Error + Send + Sync>>` and we want a single stable
+/// type at the framework boundary.
 #[derive(Debug, thiserror::Error)]
 #[error("nuke pipeline error: {0}")]
-struct ReactorPipelineError(String);
+pub struct PipelineError(String);
+
+impl PipelineError {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self(message.into())
+    }
+}

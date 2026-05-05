@@ -1,6 +1,12 @@
 [workspace]
 resolver = "3"
-members = ["crates/nuke", "crates/nuke-derive"]
+members = [
+  "crates/nuke",
+  "crates/nuke-derive",
+  "adapters/evm",
+  "adapters/evm-derive",
+  "examples/dex_arb",
+]
 
 [workspace.package]
 version = "0.1.0"

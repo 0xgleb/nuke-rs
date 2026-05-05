@@ -1,8 +1,9 @@
-//! Top-level error and result aliases for nuke-rs.
+//! Top-level error and result aliases for the framework crate.
 //!
 //! `Error` is intentionally a small enum of categories the framework
-//! itself produces (transport, decode, JSON-RPC). Domain errors from a
-//! user's `Reactor::Error` are surfaced separately via the run loop.
+//! itself produces. Adapter-specific decode / protocol errors live in
+//! the adapter crates and are wrapped through `Error::Transport` (or
+//! `Error::Config`) at the framework boundary.
 
 use std::fmt;
 
@@ -15,17 +16,10 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// separately by the run loop so the user can match on their own type.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    /// Underlying websocket / network transport failure.
-    #[error("websocket transport error: {0}")]
+    /// Underlying transport (network, ws, http) failure surfaced by an
+    /// adapter.
+    #[error("transport error: {0}")]
     Transport(#[source] Box<dyn std::error::Error + Send + Sync>),
-
-    /// JSON-RPC level error (malformed message, unexpected id, server error).
-    #[error("JSON-RPC error: {0}")]
-    JsonRpc(String),
-
-    /// ABI decode failure for an on-chain log.
-    #[error("decode error: {0}")]
-    Decode(#[from] crate::evm::DecodeError),
 
     /// Configuration / startup error (bad URL, missing required value).
     #[error("configuration error: {0}")]

@@ -1,29 +1,34 @@
-//! nuke-rs — a Tower-style, extensible framework for trading/crypto
-//! websocket communication with apalis-backed event execution.
+//! nuke — general-purpose, event-driven framework. Source → cqrs/es →
+//! Reactor → apalis Job DAG → external services. The framework crate
+//! defines the abstract traits + the eDSL + the apalis run-loop +
+//! cqrs/es bridge, and is venue-agnostic — EVM/SVM/CEX adapters live
+//! in sibling crates (e.g. `evm`).
 //!
-//! See the README and `examples/arb_bot/main.rs` for the user-facing shape.
-//! The framework's public vocabulary is two traits and one declarative
-//! macro:
+//! See `CLAUDE.md` and `docs/architecture.md` at the repo root for the
+//! durable architectural reference. Public vocabulary at a glance:
 //!
-//! - [`Subject`] — something on a chain that emits typed events.
-//! - [`Reactor`] — what reacts to events from a *list* of subjects, with
-//!   the event type computed from the list (no manual enum).
-//! - [`subjects!`] — declares a reactor's subject list once and generates
-//!   the [`Subscribed`] and [`HasSubject`] impls.
+//! - [`Subject`] — typed marker for an event source the reactor cares
+//!   about. Adapter crates extend it (e.g. `evm::EvmSubject`) with
+//!   venue-specific subscription / decode methods.
+//! - [`Reactor`] — what reacts to events from a *list* of subjects;
+//!   the event type is *computed* from the list (no manual enum).
+//! - [`subjects!`] — declares a reactor's subject list once and
+//!   generates the [`Subscribed`] / [`HasSubject`] impls.
+//! - [`pump_through_apalis`](apalis::pump_through_apalis) — the
+//!   venue-agnostic run loop adapter crates feed.
 
 // Make `::nuke::*` paths in proc-macro-emitted code resolve when used
-// from within this crate (tests, examples that don't go through cargo
+// from within this crate (tests that don't go through cargo
 // resolution by name). External users get this for free via cargo.
 extern crate self as nuke;
 
+pub mod apalis;
 pub mod domain;
 pub mod error;
-pub mod evm;
 pub mod persist;
 pub mod policy;
 pub mod tracing;
 
-mod apalis;
 mod has_subject;
 mod macros;
 mod one_of;
@@ -31,9 +36,10 @@ mod reactor;
 mod subject;
 mod subscribed;
 
+pub use apalis::{PipelineError, pump_through_apalis};
 pub use error::{Error, Result};
 pub use has_subject::HasSubject;
-pub use nuke_derive::{Domain, EvmSubject};
+pub use nuke_derive::Domain;
 pub use one_of::{Fold, OneOf};
 pub use reactor::Reactor;
 pub use subject::Subject;
@@ -42,18 +48,17 @@ pub use subscribed::{Cons, Never, Nil, SubjectList, Subscribed};
 /// Re-exports used by macro expansions. Not part of the supported API.
 #[doc(hidden)]
 pub mod reexports {
-    pub use alloy_primitives;
-    pub use alloy_sol_types;
     pub use async_trait::async_trait;
     pub use linkme;
 }
 
 /// Common imports for users of the framework.
 ///
-/// Intentionally does **not** export `Error`/`Result` — using the prelude
-/// would shadow `std::result::Result`, breaking call sites that mix in
-/// other error types (e.g. macro-generated code from `secretspec`).
-/// Reach for `nuke::Error` / `nuke::Result` explicitly when needed.
+/// Intentionally does **not** export `Error`/`Result` — using the
+/// prelude would shadow `std::result::Result`, breaking call sites
+/// that mix in other error types (e.g. macro-generated code from
+/// `secretspec`). Reach for `nuke::Error` / `nuke::Result` explicitly
+/// when needed.
 pub mod prelude {
     pub use crate::has_subject::HasSubject;
     pub use crate::one_of::{Fold, OneOf};
@@ -62,21 +67,4 @@ pub mod prelude {
     pub use crate::subjects;
     pub use crate::subscribed::{Cons, Never, Nil, SubjectList, Subscribed};
     pub use async_trait::async_trait;
-    pub use nuke_derive::EvmSubject;
-}
-
-/// Run a reactor against an EVM JSON-RPC websocket source.
-///
-/// Reads `R::Subjects` at compile time, opens the corresponding
-/// subscriptions on `source`, pipes decoded events through an internal
-/// apalis backend, and runs an apalis worker that calls
-/// `reactor.react(...)` per task until the source ends or an error
-/// occurs. The apalis layer is intentionally invisible to users.
-pub async fn run<R>(source: evm::EvmWsSource, reactor: std::sync::Arc<R>) -> Result<()>
-where
-    R: Reactor + 'static,
-    R::Subjects: evm::Subscribe<R::Subjects>,
-    <R::Subjects as SubjectList>::Event: Clone + Send + Sync + 'static,
-{
-    evm::pump(source, reactor).await
 }

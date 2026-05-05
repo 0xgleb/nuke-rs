@@ -1,0 +1,40 @@
+[package]
+name = "evm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "EVM Source / TradingVenue adapter for the nuke framework. Examples-only — not pulled in by framework crates."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+nuke.workspace = true
+evm-derive = { path = "../evm-derive", version = "0.1.0" }
+
+# Async + ws transport
+async-trait.workspace = true
+thiserror.workspace = true
+futures-util.workspace = true
+tokio = { workspace = true }
+tokio-stream.workspace = true
+tokio-tungstenite.workspace = true
+
+# JSON-RPC framing
+serde.workspace = true
+serde_json.workspace = true
+
+# Tower middleware (the layer stack inside the ws source)
+tower.workspace = true
+
+# EVM types + ABI codegen — venue specifics live HERE, not in the framework.
+alloy-primitives.workspace = true
+alloy-sol-types.workspace = true
+
+# Apalis bits the EVM pump wires together. The framework provides a
+# generic `pump_through_apalis`; this crate just builds the venue-shaped
+# stream that feeds it.
+apalis.workspace = true
+apalis-core.workspace = true
+
+tracing.workspace = true

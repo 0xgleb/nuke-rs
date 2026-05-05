@@ -20,8 +20,15 @@ use serde_json::{Value, json};
 use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio_tungstenite::tungstenite::Message;
 
-use crate::error::{Error, Result};
-use crate::evm::subscription::{RawLog, SubscriptionSpec};
+use crate::subscription::{RawLog, SubscriptionSpec};
+use nuke::{Error, Result};
+
+/// JSON-RPC level error (malformed message, unexpected id, server
+/// error). Boxed into `nuke::Error::Transport` at the framework
+/// boundary so the framework's error enum stays venue-agnostic.
+#[derive(Debug, thiserror::Error)]
+#[error("JSON-RPC error: {0}")]
+pub struct JsonRpcError(pub String);
 
 /// Single websocket connection to an Ethereum JSON-RPC endpoint.
 ///
@@ -101,7 +108,7 @@ enum WsFrame {
         #[serde(default)]
         result: Option<Value>,
         #[serde(default)]
-        error: Option<JsonRpcError>,
+        error: Option<JsonRpcErrorPayload>,
     },
     Notification {
         #[allow(dead_code)]
@@ -113,7 +120,7 @@ enum WsFrame {
 }
 
 #[derive(Debug, Deserialize)]
-struct JsonRpcError {
+struct JsonRpcErrorPayload {
     #[allow(dead_code)]
     code: i64,
     message: String,
@@ -170,7 +177,7 @@ async fn framing_task(
                         let payload = match serde_json::to_string(&request) {
                             Ok(payload) => payload,
                             Err(error) => {
-                                let _ = reply.send(Err(Error::JsonRpc(error.to_string())));
+                                let _ = reply.send(Err(Error::Transport(JsonRpcError(error.to_string()).into())));
                                 continue;
                             }
                         };
@@ -218,10 +225,13 @@ async fn framing_task(
                                     subscriptions.lock().await.insert(sub_id, ());
                                     Ok(())
                                 }
-                                (_, Some(error)) => Err(Error::JsonRpc(error.message)),
-                                (other, _) => Err(Error::JsonRpc(format!(
-                                    "unexpected eth_subscribe result: {other:?}"
-                                ))),
+                                (_, Some(error)) => Err(Error::Transport(JsonRpcError(error.message).into())),
+                                (other, _) => Err(Error::Transport(
+                                    JsonRpcError(format!(
+                                        "unexpected eth_subscribe result: {other:?}"
+                                    ))
+                                    .into(),
+                                )),
                             };
                             let _ = reply.send(outcome);
                         }

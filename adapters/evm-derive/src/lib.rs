@@ -1,18 +1,26 @@
-//! Expansion for `#[derive(EvmSubject)]`.
+//! Procedural macros for the EVM adapter.
 //!
-//! Reads `#[nuke(event = Path::To::Event, address = "hex")]` and emits:
-//! - a newtype `Id` (`<Type>Id(alloy_primitives::Address)`) implementing
-//!   `Debug`, `Display`, `Clone`, plus `From<Address>` and `Deref`,
-//! - a `Subject` impl whose `Event` is the named alloy event type, whose
-//!   `subscription()` returns a logs filter for the configured address +
-//!   the event's `SIGNATURE_HASH`, and whose `decode()` defers to the
-//!   alloy event's `SolEvent::decode_log_data`.
+//! `#[derive(EvmSubject)]` emits, from
+//! `#[nuke(event = ABI::Variant, address = "0x...")]`:
+//! - a newtype `<Type>Id(alloy_primitives::Address)` with `Debug`,
+//!   `Display`, `Clone`, `Copy`, `From<Address>`, `Deref`,
+//! - a `nuke::Subject` impl wired to the address + ABI event,
+//! - (TODO once the Subject refactor lands) an `evm::EvmSubject`
+//!   impl carrying the EVM-specific subscription / decode methods.
 
-use proc_macro2::TokenStream;
+use proc_macro::TokenStream;
+use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use syn::{Attribute, DeriveInput, LitStr, Path, parse2};
 
-pub(crate) fn expand(input: TokenStream) -> syn::Result<TokenStream> {
+#[proc_macro_derive(EvmSubject, attributes(nuke))]
+pub fn derive_evm_subject(input: TokenStream) -> TokenStream {
+    expand(input.into())
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
+}
+
+fn expand(input: TokenStream2) -> syn::Result<TokenStream2> {
     let derive: DeriveInput = parse2(input)?;
     let name = &derive.ident;
 
@@ -47,7 +55,7 @@ pub(crate) fn expand(input: TokenStream) -> syn::Result<TokenStream> {
     Ok(quote! {
         #[doc = concat!("Strongly-typed identifier for the `", stringify!(#name), "` subject.")]
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-        pub struct #id_ident(pub ::nuke::reexports::alloy_primitives::Address);
+        pub struct #id_ident(pub ::evm::reexports::alloy_primitives::Address);
 
         impl ::core::fmt::Display for #id_ident {
             fn fmt(&self, formatter: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
@@ -55,14 +63,14 @@ pub(crate) fn expand(input: TokenStream) -> syn::Result<TokenStream> {
             }
         }
 
-        impl ::core::convert::From<::nuke::reexports::alloy_primitives::Address> for #id_ident {
-            fn from(address: ::nuke::reexports::alloy_primitives::Address) -> Self {
+        impl ::core::convert::From<::evm::reexports::alloy_primitives::Address> for #id_ident {
+            fn from(address: ::evm::reexports::alloy_primitives::Address) -> Self {
                 Self(address)
             }
         }
 
         impl ::core::ops::Deref for #id_ident {
-            type Target = ::nuke::reexports::alloy_primitives::Address;
+            type Target = ::evm::reexports::alloy_primitives::Address;
             fn deref(&self) -> &Self::Target { &self.0 }
         }
 
@@ -72,26 +80,28 @@ pub(crate) fn expand(input: TokenStream) -> syn::Result<TokenStream> {
 
             const NAME: &'static str = #name_str;
             const SCHEMA_VERSION: u64 = 1;
+        }
 
-            fn address() -> ::nuke::reexports::alloy_primitives::Address {
-                ::nuke::reexports::alloy_primitives::address!(#address_with_prefix)
+        impl ::evm::EvmSubject for #name {
+            fn address() -> ::evm::reexports::alloy_primitives::Address {
+                ::evm::reexports::alloy_primitives::address!(#address_with_prefix)
             }
 
-            fn subscription() -> ::nuke::evm::SubscriptionSpec {
-                use ::nuke::reexports::alloy_sol_types::SolEvent;
-                ::nuke::evm::SubscriptionSpec::logs_for(
+            fn subscription() -> ::evm::SubscriptionSpec {
+                use ::evm::reexports::alloy_sol_types::SolEvent;
+                ::evm::SubscriptionSpec::logs_for(
                     Self::address(),
                     <#event_path as SolEvent>::SIGNATURE_HASH,
                 )
             }
 
-            fn decode(log: &::nuke::evm::RawLog) -> ::core::result::Result<
+            fn decode(log: &::evm::RawLog) -> ::core::result::Result<
                 Self::Event,
-                ::nuke::evm::DecodeError,
+                ::evm::DecodeError,
             > {
-                use ::nuke::reexports::alloy_sol_types::SolEvent;
+                use ::evm::reexports::alloy_sol_types::SolEvent;
                 <#event_path as SolEvent>::decode_log_data(log.data())
-                    .map_err(::nuke::evm::DecodeError::from)
+                    .map_err(::evm::DecodeError::from)
             }
         }
     })

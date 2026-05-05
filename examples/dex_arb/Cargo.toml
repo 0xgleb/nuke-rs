@@ -1,0 +1,51 @@
+[package]
+name = "dex-arb"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Cross-DEX arbitrage example for the nuke framework. Uses the EVM adapter against an Ethereum mainnet ws RPC; e2e test runs against an embedded mock JSON-RPC server."
+
+[[bin]]
+name = "dex-arb"
+path = "src/main.rs"
+
+[dependencies]
+nuke.workspace = true
+evm = { path = "../../adapters/evm", version = "0.1.0" }
+
+# secretspec_derive expansion needs serde + serde_json visible in the
+# dependent crate.
+serde.workspace = true
+serde_json.workspace = true
+
+# Async runtime + utilities
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync"] }
+
+# alloy: only the sol! macro for declaring the on-chain ABI in
+# example code. Framework crates do not depend on alloy.
+alloy-sol-types.workspace = true
+alloy-primitives.workspace = true
+
+# Domain primitives + Decimal helpers (the example uses Decimal in
+# the profit check)
+rust_decimal.workspace = true
+
+# Secrets: example loads ETH_WS_RPC_URL via secretspec. The framework
+# itself does not depend on secretspec.
+secretspec.workspace = true
+secretspec-derive.workspace = true
+secrecy.workspace = true
+
+# Observability
+tracing.workspace = true
+
+# Error wrapping for the example reactor
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+tokio-tungstenite.workspace = true
+futures-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
