@@ -52,7 +52,18 @@
             modules = [
               {
                 # https://devenv.sh/reference/options/
-                packages = with pkgs; lib.optionals stdenv.isDarwin [ libiconv ];
+                packages =
+                  with pkgs;
+                  [ pkg-config ]
+                  ++ lib.optionals stdenv.isDarwin [ libiconv ]
+                  # secretspec pulls in `keyring`, which links against
+                  # libdbus and (transitively) openssl on Linux. Without
+                  # these in the dev shell `cargo build` of the example
+                  # fails inside `libdbus-sys`'s build script.
+                  ++ lib.optionals stdenv.isLinux [
+                    dbus
+                    openssl
+                  ];
 
                 languages.rust = {
                   enable = true;

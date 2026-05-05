@@ -3144,6 +3144,7 @@ dependencies = [
  "futures-util",
  "linkme",
  "nuke-derive",
+ "pin-project-lite",
  "rust_decimal",
  "serde",
  "serde_json",
