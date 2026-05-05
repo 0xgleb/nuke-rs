@@ -1,62 +1,87 @@
 //! Internal adapter that drives a [`Reactor`] through apalis 1.x.
 //!
-//! Public API: [`pump_through_apalis`] — venue-agnostic. Takes a stream
-//! of typed events (the producer side is the venue's responsibility —
-//! e.g. `evm::pump` builds the stream from raw chain logs) and runs an
-//! apalis worker that hands each task to `reactor.react(...)`.
+//! Public API: [`pump_through_apalis`] - venue-agnostic. Takes a
+//! stream of typed events (the producer side is the venue's
+//! responsibility - e.g. `evm::pump` builds the stream from raw chain
+//! logs) plus a `Reactor` and its shared `Ctx`, and runs the
+//! event-to-job DAG: `event -> reactor.react -> Vec<Job> -> apalis
+//! storage -> Worker -> Job::perform(&ctx)`.
 //!
 //! The seam is intentional: switching the in-memory dequeue for a
 //! persistent backend (`apalis-sql`, `apalis-redis`) or composing
-//! reactions into a multi-step `apalis_workflow::Workflow` /
-//! `DagFlow` is a drop-in change here, not a user-visible one.
+//! multi-step `apalis_workflow::DagFlow` reactions is a drop-in
+//! change here, not a user-visible one.
 
 use std::sync::Arc;
 use std::time::Duration;
 
-use apalis::prelude::{BoxDynError, PipeExt, WorkerBuilder};
+use apalis::prelude::{Data, PipeExt, WorkerBuilder};
 use apalis_core::backend::dequeue;
-use futures_util::Stream;
+use futures_util::{Stream, StreamExt, stream};
 
 use crate::error::{Error, Result};
+use crate::job::work;
 use crate::reactor::Reactor;
 use crate::subscribed::SubjectList;
 
-/// Drive `reactor` to convergence: consume `events` (typed event union
-/// matching the reactor's subject list), push each onto an apalis
-/// `dequeue` backend through `PipeExt::pipe_to`, and run an apalis
-/// `Worker` that hands each task to `reactor.react(...)`.
+/// Drive `reactor` to convergence: consume `events` (typed event
+/// union matching the reactor's subject list), invoke `reactor.react`
+/// per event to obtain a `Vec<R::Job>`, push each Job onto an apalis
+/// `dequeue` backend, and run an apalis `Worker` that hands each Job
+/// to [`Job::perform`] (with retries via [`work`]).
 ///
-/// Venue-agnostic — the producer of the event stream is the adapter's
+/// `ctx` is the shared context the framework injects into every Job
+/// invocation via apalis's `Data<Arc<Ctx>>` extractor. Bundle every
+/// `TradingVenue` impl, persistence handle, config, etc. that any
+/// Job needs.
+///
+/// Venue-agnostic: the producer of the event stream is the adapter's
 /// concern (see e.g. `evm::pump` in the EVM adapter crate).
-pub async fn pump_through_apalis<R, S>(events: S, reactor: Arc<R>) -> Result<()>
+pub async fn pump_through_apalis<R, S>(events: S, reactor: Arc<R>, ctx: Arc<R::Ctx>) -> Result<()>
 where
     R: Reactor + 'static,
-    <R::Subjects as SubjectList>::Event: Clone + Send + Sync + 'static,
+    R::Ctx: Send + Sync + 'static,
+    <R::Subjects as SubjectList>::Event: Send + 'static,
     S: Stream<Item = std::result::Result<<R::Subjects as SubjectList>::Event, PipelineError>>
         + Send
         + Unpin
         + 'static,
 {
-    // Poll interval is the *empty-queue* backoff, not per-task latency:
-    // when nothing is queued, the worker sleeps this long before checking
-    // again. Tasks pushed via the pipe wake the worker promptly.
-    let in_memory =
-        dequeue::backend::<<R::Subjects as SubjectList>::Event>(Duration::from_millis(10));
-    let backend = events.pipe_to(in_memory);
+    // Transform: events -> reactor.react -> a stream of Jobs (or
+    // surfaced pipeline errors).
+    let job_stream = events
+        .then({
+            let reactor = Arc::clone(&reactor);
+            move |event_result| {
+                let reactor = Arc::clone(&reactor);
+                async move {
+                    match event_result {
+                        Ok(event) => Ok(reactor.react(event).await),
+                        Err(error) => Err(error),
+                    }
+                }
+            }
+        })
+        .flat_map(|reaction| match reaction {
+            Ok(jobs) => stream::iter(jobs.into_iter().map(Ok).collect::<Vec<_>>()),
+            Err(error) => stream::iter(vec![Err(error)]),
+        });
 
-    let reactor_for_handler = Arc::clone(&reactor);
-    let handler = move |event: <R::Subjects as SubjectList>::Event| {
-        let reactor = Arc::clone(&reactor_for_handler);
-        async move {
-            reactor
-                .react(event)
-                .await
-                .map_err(|error| Box::new(error) as BoxDynError)
-        }
+    // Poll interval is the *empty-queue* backoff. Tasks pushed via
+    // the pipe wake the worker promptly.
+    let in_memory = dequeue::backend::<R::Job>(Duration::from_millis(10));
+    let backend = job_stream.pipe_to(in_memory);
+
+    // Function-handler form: explicit closure so trait inference for
+    // `IntoWorkerService` resolves cleanly without relying on a turbofished
+    // generic free function (which can leave Args/Ctx unconstrained).
+    let handler = |job: R::Job, ctx: Data<Arc<R::Ctx>>| async move {
+        work::<R::Ctx, R::Job>(job, ctx).await;
     };
 
     WorkerBuilder::new("nuke-reactor")
         .backend(backend)
+        .data(ctx)
         .build(handler)
         .run()
         .await

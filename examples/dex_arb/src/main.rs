@@ -25,8 +25,10 @@ use std::sync::Arc;
 use alloy_sol_types::sol;
 use evm::{EvmSubject, EvmWsSource};
 use nuke::prelude::*;
+use nuke::{Job, Label};
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
+use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
 secretspec_derive::declare_secrets!("../../secretspec.toml");
@@ -72,26 +74,63 @@ impl PoolState {
     }
 }
 
-/// A detected cross-pool arbitrage opportunity. The "executor" worker
-/// receives one of these per fire.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// A detected cross-pool arbitrage opportunity. The reactor emits an
+/// [`ArbJob::Log`] per opportunity; apalis runs the Job's `perform`
+/// (with retries) - in this example that just logs. Real trade
+/// execution would be a different `ArbJob` variant whose `perform`
+/// calls a `TradingVenue::place_trade`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Opportunity {
     pub buy: Pool,
     pub sell: Pool,
     pub edge_bps: i64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Pool {
     UniV2,
     Sushi,
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum ArbError {}
+/// Shared context passed to every Job's `perform`. In a real bot
+/// this carries `TradingVenue` impls, signers, persistence handles,
+/// etc.; the example's executor has nothing to inject.
+#[derive(Default, Debug)]
+pub struct ArbCtx;
 
-/// The reactor. Holds the per-pool reserve state under a single mutex
-/// (writes are infrequent - no contention concern at this scale).
+/// The job(s) the reactor enqueues. One variant per kind of work the
+/// reactor wants apalis to perform on its behalf.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ArbJob {
+    Log(Opportunity),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ArbJobError {}
+
+impl Job<ArbCtx> for ArbJob {
+    type Error = ArbJobError;
+
+    fn label(&self) -> Label {
+        match self {
+            ArbJob::Log(_) => Label::new("arb.log_opportunity"),
+        }
+    }
+
+    async fn perform(&self, _ctx: &ArbCtx) -> Result<(), Self::Error> {
+        match self {
+            ArbJob::Log(opp) => {
+                ::tracing::info!(?opp, "arbitrage opportunity");
+                Ok(())
+            }
+        }
+    }
+}
+
+/// The reactor. Holds the per-pool reserve state under a single
+/// mutex (writes are infrequent - no contention concern at this
+/// scale). `react` is a pure decider: it updates state and returns
+/// any jobs the framework should enqueue.
 pub struct ArbBot {
     threshold_bps: i64,
     state: Mutex<State>,
@@ -111,57 +150,43 @@ impl ArbBot {
         }
     }
 
-    async fn on_univ2(
-        &self,
-        _id: UniV2WethUsdcId,
-        sync: UniswapV2Pair::Sync,
-    ) -> Result<(), ArbError> {
+    async fn on_univ2(&self, _id: UniV2WethUsdcId, sync: UniswapV2Pair::Sync) -> Vec<ArbJob> {
         let mut state = self.state.lock().await;
         state.univ2 = sync_to_state(&sync);
-        if let Some(opp) = check(
+        check(
             self.threshold_bps,
             state.univ2,
             state.sushi,
             Pool::UniV2,
             Pool::Sushi,
-        ) {
-            self.emit(opp);
-        }
-        Ok(())
+        )
+        .into_iter()
+        .map(ArbJob::Log)
+        .collect()
     }
 
-    async fn on_sushi(
-        &self,
-        _id: SushiV2WethUsdcId,
-        sync: UniswapV2Pair::Sync,
-    ) -> Result<(), ArbError> {
+    async fn on_sushi(&self, _id: SushiV2WethUsdcId, sync: UniswapV2Pair::Sync) -> Vec<ArbJob> {
         let mut state = self.state.lock().await;
         state.sushi = sync_to_state(&sync);
-        if let Some(opp) = check(
+        check(
             self.threshold_bps,
             state.sushi,
             state.univ2,
             Pool::Sushi,
             Pool::UniV2,
-        ) {
-            self.emit(opp);
-        }
-        Ok(())
-    }
-
-    fn emit(&self, opp: Opportunity) {
-        ::tracing::info!(?opp, "arbitrage opportunity");
+        )
+        .into_iter()
+        .map(ArbJob::Log)
+        .collect()
     }
 }
 
 #[async_trait]
 impl Reactor for ArbBot {
-    type Error = ArbError;
+    type Job = ArbJob;
+    type Ctx = ArbCtx;
 
-    async fn react(
-        &self,
-        event: <Self::Subjects as SubjectList>::Event,
-    ) -> Result<(), Self::Error> {
+    async fn react(&self, event: <Self::Subjects as SubjectList>::Event) -> Vec<Self::Job> {
         event
             .on(|id, sync| async move { self.on_univ2(id, sync).await })
             .on(|id, sync| async move { self.on_sushi(id, sync).await })
@@ -219,8 +244,9 @@ async fn main() -> nuke::Result<()> {
 
     let chain = EvmWsSource::connect(&url).await?;
     let bot = Arc::new(ArbBot::new(20));
+    let ctx = Arc::new(ArbCtx);
 
-    evm::pump(chain, bot).await
+    evm::pump(chain, bot, ctx).await
 }
 
 // ---------------------------------------------------------------------
@@ -263,13 +289,13 @@ mod e2e {
 
     subjects!(TestBot, [PoolA, PoolB]);
 
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
     enum Side {
         A,
         B,
     }
 
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
     struct TestOpportunity {
         buy: Side,
         sell: Side,
@@ -293,57 +319,84 @@ mod e2e {
         b: Reserves,
     }
 
-    struct TestBot {
-        threshold_bps: i64,
-        state: Mutex<TestState>,
+    /// Test ctx: a channel the assertion-side drains. The Job's
+    /// `perform` writes to it. Demonstrates how a reactor's
+    /// per-deployment dependencies (here: a test sink; in production:
+    /// venue handles, signers, persistence) reach Jobs through the
+    /// framework-injected context rather than reactor closure capture.
+    struct TestCtx {
         out: mpsc::Sender<TestOpportunity>,
     }
 
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    enum TestJob {
+        Emit(TestOpportunity),
+    }
+
     #[derive(Debug, thiserror::Error)]
-    enum TestBotError {}
+    enum TestJobError {}
+
+    impl Job<TestCtx> for TestJob {
+        type Error = TestJobError;
+
+        fn label(&self) -> Label {
+            Label::new("test.emit_opportunity")
+        }
+
+        async fn perform(&self, ctx: &TestCtx) -> Result<(), Self::Error> {
+            match self {
+                TestJob::Emit(opp) => {
+                    let _ = ctx.out.send(*opp).await;
+                    Ok(())
+                }
+            }
+        }
+    }
+
+    struct TestBot {
+        threshold_bps: i64,
+        state: Mutex<TestState>,
+    }
 
     impl TestBot {
-        fn new(threshold_bps: i64, out: mpsc::Sender<TestOpportunity>) -> Self {
+        fn new(threshold_bps: i64) -> Self {
             Self {
                 threshold_bps,
                 state: Mutex::new(TestState::default()),
-                out,
             }
         }
 
-        async fn on_a(&self, _id: PoolAId, sync: V2::Sync) -> Result<(), TestBotError> {
+        async fn on_a(&self, _id: PoolAId, sync: V2::Sync) -> Vec<TestJob> {
             let mut state = self.state.lock().await;
             state.a = Reserves {
                 r0: sync.reserve0.to::<u128>(),
                 r1: sync.reserve1.to::<u128>(),
             };
-            if let Some(opp) = test_check(self.threshold_bps, state.a, state.b, Side::A, Side::B) {
-                let _ = self.out.send(opp).await;
-            }
-            Ok(())
+            test_check(self.threshold_bps, state.a, state.b, Side::A, Side::B)
+                .into_iter()
+                .map(TestJob::Emit)
+                .collect()
         }
 
-        async fn on_b(&self, _id: PoolBId, sync: V2::Sync) -> Result<(), TestBotError> {
+        async fn on_b(&self, _id: PoolBId, sync: V2::Sync) -> Vec<TestJob> {
             let mut state = self.state.lock().await;
             state.b = Reserves {
                 r0: sync.reserve0.to::<u128>(),
                 r1: sync.reserve1.to::<u128>(),
             };
-            if let Some(opp) = test_check(self.threshold_bps, state.b, state.a, Side::B, Side::A) {
-                let _ = self.out.send(opp).await;
-            }
-            Ok(())
+            test_check(self.threshold_bps, state.b, state.a, Side::B, Side::A)
+                .into_iter()
+                .map(TestJob::Emit)
+                .collect()
         }
     }
 
     #[async_trait]
     impl Reactor for TestBot {
-        type Error = TestBotError;
+        type Job = TestJob;
+        type Ctx = TestCtx;
 
-        async fn react(
-            &self,
-            event: <Self::Subjects as SubjectList>::Event,
-        ) -> Result<(), Self::Error> {
+        async fn react(&self, event: <Self::Subjects as SubjectList>::Event) -> Vec<Self::Job> {
             event
                 .on(|id, sync| async move { self.on_a(id, sync).await })
                 .on(|id, sync| async move { self.on_b(id, sync).await })
@@ -414,8 +467,9 @@ mod e2e {
             .expect("connect to mock");
 
         let (out_tx, out_rx) = mpsc::channel(16);
-        let bot = Arc::new(TestBot::new(20, out_tx));
-        let runner = tokio::spawn(evm::pump(chain, bot));
+        let bot = Arc::new(TestBot::new(20));
+        let ctx = Arc::new(TestCtx { out: out_tx });
+        let runner = tokio::spawn(evm::pump(chain, bot, ctx));
 
         let expected = 3;
         let receiver = Arc::new(tokio::sync::Mutex::new(out_rx));

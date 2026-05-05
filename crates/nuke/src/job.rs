@@ -42,7 +42,14 @@ where
     fn label(&self) -> Label;
 
     /// Process this job using the provided context.
-    async fn perform(&self, ctx: &Ctx) -> Result<(), Self::Error>;
+    ///
+    /// The returned future must be `Send` so apalis can run it on a
+    /// multi-threaded executor; the framework's run loop is unconditionally
+    /// `Send`-bound.
+    fn perform(
+        &self,
+        ctx: &Ctx,
+    ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send;
 }
 
 /// Human-readable identifier for an enqueued job. Used in structured

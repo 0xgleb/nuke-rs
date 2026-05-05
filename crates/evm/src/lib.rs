@@ -67,13 +67,16 @@ pub mod reexports {
 ///
 /// Reads `R::Subjects` at compile time, opens the corresponding
 /// `eth_subscribe` calls on `source`, and pipes the resulting typed
-/// event stream through `nuke::pump_through_apalis`. The framework
-/// owns the apalis run loop; this function is the EVM-specific bridge.
-pub async fn pump<R>(mut source: EvmWsSource, reactor: Arc<R>) -> nuke::Result<()>
+/// event stream through `nuke::pump_through_apalis`, which invokes
+/// `reactor.react(event)` per item, enqueues the resulting jobs, and
+/// runs them via `Job::perform(&ctx)`. The framework owns the apalis
+/// run loop; this function is the EVM-specific bridge.
+pub async fn pump<R>(mut source: EvmWsSource, reactor: Arc<R>, ctx: Arc<R::Ctx>) -> nuke::Result<()>
 where
     R: Reactor + 'static,
     R::Subjects: Subscribe<R::Subjects>,
-    <R::Subjects as SubjectList>::Event: Clone + Send + Sync + 'static,
+    R::Ctx: Send + Sync + 'static,
+    <R::Subjects as SubjectList>::Event: Send + 'static,
 {
     let dispatcher = <R::Subjects as Subscribe<R::Subjects>>::open_all(&source).await?;
     let log_stream = source
@@ -90,5 +93,5 @@ where
         }
     });
 
-    pump_through_apalis(events, reactor).await
+    pump_through_apalis(events, reactor, ctx).await
 }
