@@ -17,7 +17,7 @@ mod macros;
 mod reason;
 pub mod registry;
 
-pub use action::{Action, DagBuilder, ErasedAction, NodeHandle};
+pub use action::Action;
 pub use capability::{Capability, Context, HasInventory, HasMarketData, HasOrder, HasRiskLimits};
 
 pub use ast::{

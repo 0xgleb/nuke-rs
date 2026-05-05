@@ -33,13 +33,13 @@ pub struct TestPlan {
 }
 
 /// Walk a rule and emit the plan.
-pub fn plan(rule: &RuleNode) -> TestPlan {
+pub fn plan<A>(rule: &RuleNode<A>) -> TestPlan {
     let mut branches = Vec::new();
     walk(rule, &mut branches);
     TestPlan { branches }
 }
 
-fn walk(rule: &RuleNode, branches: &mut Vec<LeafBranch>) {
+fn walk<A>(rule: &RuleNode<A>, branches: &mut Vec<LeafBranch>) {
     match rule {
         RuleNode::RejectIf {
             rule, condition, ..
@@ -75,7 +75,7 @@ fn walk(rule: &RuleNode, branches: &mut Vec<LeafBranch>) {
 fn render_condition(expr: &InnerExpr) -> String {
     // Reuse the markdown layer's expression rendering for consistency.
     use crate::policy::backends::markdown;
-    markdown::render(&RuleNode::RejectIf {
+    markdown::render(&RuleNode::<()>::RejectIf {
         rule: RuleId::new("__"),
         condition: expr.clone(),
         reason: crate::policy::Reason::literal(""),
@@ -95,7 +95,7 @@ mod tests {
 
     #[test]
     fn plan_lists_one_branch_per_leaf() {
-        let rule = RuleNode::All(vec![
+        let rule: RuleNode = RuleNode::All(vec![
             RuleNode::RejectIf {
                 rule: RuleId::new("a"),
                 condition: Expr::<BoolT>::lit(true).into_inner(),

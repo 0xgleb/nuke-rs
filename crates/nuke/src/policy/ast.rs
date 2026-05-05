@@ -22,7 +22,6 @@ use rust_decimal::Decimal;
 use serde::Serialize;
 
 use crate::domain::{Notional, Px, Qty, Side, Symbol};
-use crate::policy::action::ErasedAction;
 use crate::policy::decision::{EscalationTarget, RuleId};
 use crate::policy::reason::{Reason, SlotName};
 
@@ -346,16 +345,28 @@ pub enum BinOp {
 // Public: rule-level control flow
 // ---------------------------------------------------------------------
 
-/// Control-flow node above the predicate layer. Folds over `RuleNode`
-/// evaluate to a [`Decision`](crate::policy::Decision).
+/// Control-flow node above the predicate layer.
+///
+/// Generic over an action type `A` (default `()` for action-free
+/// verdict-only policies). When `A` is a real
+/// [`Action`](crate::policy::action::Action), the [`RuleNode::Do`]
+/// leaf carries one of those values and the DAG compiler asks it to
+/// lower itself into a sub-DAG of `apalis_workflow::DagFlow` nodes.
+///
+/// Strategies that mix multiple verbs typically wrap them in an
+/// adopter-defined enum (`enum ArbVerb { Buy(Buy<V>),
+/// Transfer(Transfer<F, T>) }`) and use `RuleNode<ArbVerb>`. The
+/// adopter implements [`Action`](crate::policy::action::Action) on
+/// the wrapping enum.
 #[derive(Debug, Clone, PartialEq, Serialize)]
-pub enum RuleNode {
+#[serde(bound = "A: Serialize")]
+pub enum RuleNode<A = ()> {
     /// Guard: only evaluate `then` when *every* `condition` holds.
     /// When a guard fails, the rule short-circuits to `Allow` (the
     /// guarded branch isn't applicable).
     Given {
         conditions: Vec<InnerExpr>,
-        then: Box<RuleNode>,
+        then: Box<RuleNode<A>>,
     },
     /// If `condition` is true, return `Deny { rule, reason, bindings }`.
     RejectIf {
@@ -372,10 +383,10 @@ pub enum RuleNode {
         reason: Reason,
     },
     /// Conjunction: every sub-rule must `Allow`. First non-`Allow` wins.
-    All(Vec<RuleNode>),
+    All(Vec<RuleNode<A>>),
     /// Sequence: first sub-rule that returns non-`Allow` wins. If all
     /// sub-rules `Allow`, the whole node `Allow`s.
-    Any(Vec<RuleNode>),
+    Any(Vec<RuleNode<A>>),
     /// Capture `expr`'s value into the bindings table under `name`,
     /// then evaluate `then`. The bound value becomes available via
     /// `InnerExpr::Slot(name)` and lands in `Bindings` on any
@@ -383,22 +394,13 @@ pub enum RuleNode {
     Bind {
         name: SlotName,
         expr: InnerExpr,
-        then: Box<RuleNode>,
+        then: Box<RuleNode<A>>,
     },
-    /// Side-effect leaf: invoke a typed verb (an [`Action`] impl) when
-    /// the rule reaches this leaf without `Deny` or `Escalate`. The
-    /// DAG compiler asks the action to lower itself into a sub-DAG
-    /// of nodes (construct -> risk-check -> sign -> submit ->
-    /// wait-for-fill -> emit) and stitches that sub-DAG into the
-    /// surrounding policy DAG via predicate-gate edges.
-    ///
-    /// `Box<dyn ErasedAction>` is the type-object form so a single
-    /// rule tree can mix verbs of different output types
-    /// (e.g. `Buy<V>` and `Transfer<F, T>`); the typed surface lives
-    /// on [`Action`] and adopters extend the DSL by implementing it.
-    ///
-    /// [`Action`]: crate::policy::action::Action
-    Do(Box<dyn ErasedAction>),
+    /// Side-effect leaf: a typed verb (an
+    /// [`Action`](crate::policy::action::Action) value) reached when
+    /// the rule completes without `Deny` or `Escalate`. The DAG
+    /// compiler asks the action to lower itself into a sub-DAG.
+    Do(A),
 }
 
 // ---------------------------------------------------------------------
@@ -455,7 +457,7 @@ mod tests {
     #[test]
     fn rule_node_can_nest() {
         let condition = lt(field::<DecT>("order", "qty"), Expr::<DecT>::lit(d(100)));
-        let rule = RuleNode::RejectIf {
+        let rule: RuleNode = RuleNode::RejectIf {
             rule: RuleId::new("orders.too_small"),
             condition: condition.into_inner(),
             reason: Reason::literal("order qty too small"),

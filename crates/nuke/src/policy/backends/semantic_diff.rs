@@ -27,7 +27,7 @@ pub enum Diff {
 }
 
 /// Classify the difference between two revisions of a rule.
-pub fn diff(before: &RuleNode, after: &RuleNode) -> Diff {
+pub fn diff<A: serde::Serialize>(before: &RuleNode<A>, after: &RuleNode<A>) -> Diff {
     let hash_before = schema_hash(before).expect("AST is always encodable");
     let hash_after = schema_hash(after).expect("AST is always encodable");
     if hash_before == hash_after {
@@ -58,7 +58,7 @@ pub fn diff(before: &RuleNode, after: &RuleNode) -> Diff {
     }
 }
 
-fn leaf_count(rule: &RuleNode) -> usize {
+fn leaf_count<A>(rule: &RuleNode<A>) -> usize {
     match rule {
         RuleNode::RejectIf { .. } | RuleNode::EscalateIf { .. } => 1,
         RuleNode::Given { then, .. } | RuleNode::Bind { then, .. } => leaf_count(then),
@@ -69,7 +69,7 @@ fn leaf_count(rule: &RuleNode) -> usize {
     }
 }
 
-fn predicate_complexity(rule: &RuleNode) -> usize {
+fn predicate_complexity<A>(rule: &RuleNode<A>) -> usize {
     match rule {
         RuleNode::Given { conditions, then } => {
             conditions.iter().map(expr_size).sum::<usize>() + predicate_complexity(then)

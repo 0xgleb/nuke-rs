@@ -10,13 +10,17 @@ use crate::policy::ast::{
 use crate::policy::reason::Reason;
 
 /// Render a [`RuleNode`] as a markdown digest.
-pub fn render(rule: &RuleNode) -> String {
+pub fn render<A: crate::policy::action::Action>(rule: &RuleNode<A>) -> String {
     let mut out = String::new();
     render_rule(rule, 0, &mut out);
     out
 }
 
-fn render_rule(rule: &RuleNode, depth: usize, out: &mut String) {
+fn render_rule<A: crate::policy::action::Action>(
+    rule: &RuleNode<A>,
+    depth: usize,
+    out: &mut String,
+) {
     let bullet = "  ".repeat(depth);
     match rule {
         RuleNode::Given { conditions, then } => {
@@ -76,8 +80,8 @@ fn render_rule(rule: &RuleNode, depth: usize, out: &mut String) {
             .ok();
             render_rule(then, depth, out);
         }
-        RuleNode::Do(action) => {
-            writeln!(out, "{bullet}- **Do** `{}`", action.kind()).ok();
+        RuleNode::Do(_) => {
+            writeln!(out, "{bullet}- **Do** `{}`", A::KIND).ok();
         }
     }
 }
@@ -173,7 +177,7 @@ mod tests {
             Expr::<QtyT>::lit(Qty::new(d(100))),
         )
         .into_inner();
-        let rule = RuleNode::RejectIf {
+        let rule: RuleNode = RuleNode::RejectIf {
             rule: RuleId::new("orders.too_large"),
             condition,
             reason: Reason::literal("order qty exceeds limit"),
@@ -193,7 +197,7 @@ mod tests {
 
     #[test]
     fn renders_nested_all_and_any_with_indentation() {
-        let inner = RuleNode::RejectIf {
+        let inner: RuleNode = RuleNode::RejectIf {
             rule: RuleId::new("inner"),
             condition: Expr::<crate::policy::ast::BoolT>::lit(true).into_inner(),
             reason: Reason::literal("inner reason"),

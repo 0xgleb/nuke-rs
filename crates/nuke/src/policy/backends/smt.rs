@@ -17,7 +17,7 @@ use crate::policy::ast::{
 /// Emit the SMT-LIB script that asserts the rule's "deny condition" -
 /// useful for proving that two rules can't both fire on the same input
 /// (non-subsumption).
-pub fn render_assert(rule: &RuleNode) -> String {
+pub fn render_assert<A>(rule: &RuleNode<A>) -> String {
     let mut declared: BTreeSet<String> = BTreeSet::new();
     collect_decls(rule, &mut declared);
 
@@ -36,7 +36,7 @@ pub fn render_assert(rule: &RuleNode) -> String {
     out
 }
 
-fn collect_decls(rule: &RuleNode, into: &mut BTreeSet<String>) {
+fn collect_decls<A>(rule: &RuleNode<A>, into: &mut BTreeSet<String>) {
     match rule {
         RuleNode::Given { conditions, then } => {
             for condition in conditions {
@@ -81,7 +81,7 @@ fn collect_expr_decls(expr: &InnerExpr, into: &mut BTreeSet<String>) {
     }
 }
 
-fn rule_to_smt(rule: &RuleNode) -> String {
+fn rule_to_smt<A>(rule: &RuleNode<A>) -> String {
     match rule {
         RuleNode::Given { conditions, then } => {
             let guard = if conditions.len() == 1 {
@@ -198,7 +198,7 @@ mod tests {
             Expr::<QtyT>::lit(Qty::new(rust_decimal::Decimal::from(100))),
         )
         .into_inner();
-        let rule = RuleNode::RejectIf {
+        let rule: RuleNode = RuleNode::RejectIf {
             rule: RuleId::new("orders.too_large"),
             condition,
             reason: Reason::literal("nope"),

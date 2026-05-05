@@ -97,7 +97,7 @@ mod tests {
     #[test]
     fn schema_hash_changes_when_rule_changes() {
         let original = sample_rule();
-        let modified = match original.clone() {
+        let modified: RuleNode = match original.clone() {
             RuleNode::RejectIf {
                 rule, condition, ..
             } => RuleNode::RejectIf {

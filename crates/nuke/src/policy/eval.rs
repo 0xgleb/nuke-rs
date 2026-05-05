@@ -44,13 +44,13 @@ pub enum EvalError {
 /// leaves are treated as `Allow` - the runtime evaluator only
 /// computes the verdict; actually executing the verb's sub-DAG is
 /// the DAG compiler / apalis runtime's job.
-pub fn evaluate<C: Context>(rule: &RuleNode, ctx: &C) -> Result<Decision, EvalError> {
+pub fn evaluate<C: Context, A>(rule: &RuleNode<A>, ctx: &C) -> Result<Decision, EvalError> {
     let mut bindings = Bindings::empty();
     eval_rule(rule, ctx, &mut bindings)
 }
 
-fn eval_rule<C: Context>(
-    rule: &RuleNode,
+fn eval_rule<C: Context, A>(
+    rule: &RuleNode<A>,
     ctx: &C,
     bindings: &mut Bindings,
 ) -> Result<Decision, EvalError> {
@@ -286,7 +286,7 @@ mod tests {
 
     #[test]
     fn allow_when_no_rule_fires() {
-        let rule = RuleNode::RejectIf {
+        let rule: RuleNode = RuleNode::RejectIf {
             rule: RuleId::new("test.never"),
             condition: Expr::<crate::policy::ast::BoolT>::lit(false).into_inner(),
             reason: Reason::literal("never"),
@@ -307,7 +307,7 @@ mod tests {
             Expr::<QtyT>::lit(Qty::new(d(10))),
         )
         .into_inner();
-        let rule = RuleNode::RejectIf {
+        let rule: RuleNode = RuleNode::RejectIf {
             rule: RuleId::new("test.too_small"),
             condition,
             reason: Reason::literal("too small"),
@@ -328,7 +328,7 @@ mod tests {
             Expr::<QtyT>::lit(Qty::new(d(1_000))),
         )
         .into_inner();
-        let rule = RuleNode::EscalateIf {
+        let rule: RuleNode = RuleNode::EscalateIf {
             rule: RuleId::new("test.large_order"),
             condition,
             to: EscalationTarget::new("compliance"),
@@ -350,12 +350,12 @@ mod tests {
             Expr::<QtyT>::lit(Qty::new(d(0))),
         )
         .into_inner();
-        let rejection = RuleNode::RejectIf {
+        let rejection: RuleNode = RuleNode::RejectIf {
             rule: RuleId::new("test.would_reject"),
             condition: Expr::<crate::policy::ast::BoolT>::lit(true).into_inner(),
             reason: Reason::literal("would reject"),
         };
-        let rule = RuleNode::Given {
+        let rule: RuleNode = RuleNode::Given {
             conditions: vec![guard],
             then: Box::new(rejection),
         };
@@ -373,7 +373,7 @@ mod tests {
 
     #[test]
     fn bindings_carry_through_to_deny() {
-        let rule = RuleNode::Bind {
+        let rule: RuleNode = RuleNode::Bind {
             name: SlotName("requested"),
             expr: field::<QtyT>("order", "qty").into_inner(),
             then: Box::new(RuleNode::RejectIf {
@@ -407,7 +407,7 @@ mod tests {
         );
         let condition = ge(Expr::<DecT>::lit(d(10_000)), Expr::<DecT>::lit(d(0)));
         // Bind notional and then deny (use it via slot to prove eval).
-        let rule = RuleNode::Bind {
+        let rule: RuleNode = RuleNode::Bind {
             name: SlotName("notional"),
             expr: notional.into_inner(),
             then: Box::new(RuleNode::RejectIf {
@@ -463,7 +463,7 @@ mod tests {
         fn derive_domain_round_trips_through_evaluator() {
             let condition =
                 lt(derived_order::qty(), Expr::<QtyT>::lit(Qty::new(d(10)))).into_inner();
-            let rule = RuleNode::RejectIf {
+            let rule: RuleNode = RuleNode::RejectIf {
                 rule: RuleId::new("test.derived"),
                 condition,
                 reason: Reason::literal("derived"),
@@ -481,7 +481,7 @@ mod tests {
 
     #[test]
     fn missing_field_yields_eval_error() {
-        let rule = RuleNode::RejectIf {
+        let rule: RuleNode = RuleNode::RejectIf {
             rule: RuleId::new("test.missing"),
             condition: field::<crate::policy::ast::BoolT>("order", "nonexistent").into_inner(),
             reason: Reason::literal("won't fire"),

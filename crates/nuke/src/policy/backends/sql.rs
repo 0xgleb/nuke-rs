@@ -12,11 +12,11 @@ use crate::policy::ast::{
 
 /// Render the rule as a SQL `WHERE` predicate that matches every row
 /// the rule would have denied.
-pub fn render_where(rule: &RuleNode) -> String {
+pub fn render_where<A>(rule: &RuleNode<A>) -> String {
     rule_to_sql(rule)
 }
 
-fn rule_to_sql(rule: &RuleNode) -> String {
+fn rule_to_sql<A>(rule: &RuleNode<A>) -> String {
     match rule {
         RuleNode::Given { conditions, then } => {
             let guard = conditions
@@ -141,7 +141,7 @@ mod tests {
             Expr::<QtyT>::lit(Qty::new(rust_decimal::Decimal::from(100))),
         )
         .into_inner();
-        let rule = RuleNode::RejectIf {
+        let rule: RuleNode = RuleNode::RejectIf {
             rule: RuleId::new("orders.too_large"),
             condition,
             reason: Reason::literal("nope"),

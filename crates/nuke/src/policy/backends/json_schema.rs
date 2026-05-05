@@ -14,7 +14,7 @@ use crate::policy::ast::{BinOpExpr, CmpExpr, FieldRef, InnerExpr, LitValue, Rule
 /// Field types are inferred from any matching `LitValue` literals seen
 /// alongside the field; if no literal disambiguates, the schema falls
 /// back to an unconstrained type.
-pub fn render(rule: &RuleNode) -> Value {
+pub fn render<A>(rule: &RuleNode<A>) -> Value {
     let mut fields: BTreeMap<String, FieldShape> = BTreeMap::new();
     walk_rule(rule, &mut fields);
 
@@ -91,7 +91,7 @@ impl FieldShape {
     }
 }
 
-fn walk_rule(rule: &RuleNode, fields: &mut BTreeMap<String, FieldShape>) {
+fn walk_rule<A>(rule: &RuleNode<A>, fields: &mut BTreeMap<String, FieldShape>) {
     match rule {
         RuleNode::Given { conditions, then } => {
             for condition in conditions {
@@ -178,7 +178,7 @@ mod tests {
             Expr::<QtyT>::lit(Qty::new(rust_decimal::Decimal::from(100))),
         )
         .into_inner();
-        let rule = RuleNode::RejectIf {
+        let rule: RuleNode = RuleNode::RejectIf {
             rule: RuleId::new("orders.too_large"),
             condition,
             reason: Reason::literal("nope"),

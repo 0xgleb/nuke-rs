@@ -171,7 +171,7 @@ macro_rules! define_rule {
 #[cfg(test)]
 mod tests {
     use crate::domain::Qty;
-    use crate::policy::ast::{BoolT, Expr, QtyT, gt, lt};
+    use crate::policy::ast::{BoolT, Expr, QtyT, RuleNode, gt, lt};
     use crate::policy::capability::{Context, HasOrder};
     use crate::policy::eval::evaluate;
     use crate::policy::reason::SlotValue;
@@ -203,7 +203,7 @@ mod tests {
 
     #[test]
     fn reject_when_macro_builds_reject_if_node() {
-        let rule = reject_when!(
+        let rule: RuleNode = reject_when!(
             "orders.too_small",
             lt(order_qty(), Expr::<QtyT>::lit(Qty::new(d(10)))),
             "order qty too small",
@@ -216,7 +216,7 @@ mod tests {
 
     #[test]
     fn escalate_when_macro_builds_escalate_if_node() {
-        let rule = escalate_when!(
+        let rule: RuleNode = escalate_when!(
             "orders.large",
             gt(order_qty(), Expr::<QtyT>::lit(Qty::new(d(1000)))),
             to "compliance",
@@ -230,7 +230,7 @@ mod tests {
 
     #[test]
     fn all_of_macro_short_circuits_on_first_deny() {
-        let rule = all_of!(
+        let rule: RuleNode = all_of!(
             reject_when!("orders.first", Expr::<BoolT>::lit(false), "ignored",),
             reject_when!("orders.second", Expr::<BoolT>::lit(true), "fires",),
         );
@@ -243,7 +243,7 @@ mod tests {
 
     #[test]
     fn given_short_circuits_to_allow_when_guard_fails() {
-        let rule = given!(
+        let rule: RuleNode = given!(
             [Expr::<BoolT>::lit(false)] then reject_when!(
                 "orders.would_reject",
                 Expr::<BoolT>::lit(true),
@@ -258,7 +258,7 @@ mod tests {
 
     #[test]
     fn policy_umbrella_matches_reject_shape() {
-        let rule = policy! {
+        let rule: RuleNode = policy! {
             reject "orders.too_small"
             when lt(order_qty(), Expr::<QtyT>::lit(Qty::new(d(10)))),
             because "policy macro"

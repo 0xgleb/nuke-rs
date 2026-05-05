@@ -13,7 +13,7 @@ use crate::policy::ast::{
 
 /// Render the rule as a TLA+ predicate operator. The caller invokes
 /// it as `<predicate_name>(state)` from the surrounding spec.
-pub fn render(predicate_name: &str, rule: &RuleNode) -> String {
+pub fn render<A>(predicate_name: &str, rule: &RuleNode<A>) -> String {
     let mut out = String::new();
     writeln!(out, "(* nuke TLA+ export for `{predicate_name}` *)").ok();
     writeln!(out, "{predicate_name}(state) ==").ok();
@@ -21,7 +21,7 @@ pub fn render(predicate_name: &str, rule: &RuleNode) -> String {
     out
 }
 
-fn rule_to_tla(rule: &RuleNode) -> String {
+fn rule_to_tla<A>(rule: &RuleNode<A>) -> String {
     match rule {
         RuleNode::Given { conditions, then } => {
             let guard = conditions
@@ -136,7 +136,7 @@ mod tests {
             Expr::<QtyT>::lit(Qty::new(rust_decimal::Decimal::from(100))),
         )
         .into_inner();
-        let rule = RuleNode::RejectIf {
+        let rule: RuleNode = RuleNode::RejectIf {
             rule: RuleId::new("orders.too_large"),
             condition,
             reason: Reason::literal("nope"),

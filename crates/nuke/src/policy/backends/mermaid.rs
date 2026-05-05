@@ -8,7 +8,7 @@ use crate::policy::ast::{InnerExpr, RuleNode};
 use crate::policy::backends::markdown;
 
 /// Render a [`RuleNode`] as a mermaid `flowchart TD` block.
-pub fn render(rule: &RuleNode) -> String {
+pub fn render<A: crate::policy::action::Action>(rule: &RuleNode<A>) -> String {
     let mut out = String::new();
     writeln!(out, "flowchart TD").ok();
     let mut counter: usize = 0;
@@ -19,7 +19,12 @@ pub fn render(rule: &RuleNode) -> String {
     out
 }
 
-fn walk(rule: &RuleNode, prev: String, counter: &mut usize, out: &mut String) -> String {
+fn walk<A: crate::policy::action::Action>(
+    rule: &RuleNode<A>,
+    prev: String,
+    counter: &mut usize,
+    out: &mut String,
+) -> String {
     match rule {
         RuleNode::Given { conditions, then } => {
             let id = next_id(counter);
@@ -82,14 +87,9 @@ fn walk(rule: &RuleNode, prev: String, counter: &mut usize, out: &mut String) ->
             writeln!(out, "    {prev} --> {id}").ok();
             walk(then, id, counter, out)
         }
-        RuleNode::Do(action) => {
+        RuleNode::Do(_) => {
             let id = next_id(counter);
-            writeln!(
-                out,
-                "    {id}[[{}]]",
-                escape(&format!("do {}", action.kind())),
-            )
-            .ok();
+            writeln!(out, "    {id}[[{}]]", escape(&format!("do {}", A::KIND))).ok();
             writeln!(out, "    {prev} --> {id}").ok();
             id
         }
@@ -105,7 +105,7 @@ fn next_id(counter: &mut usize) -> String {
 /// Reuse the markdown layer's expression rendering so the mermaid
 /// diagram stays in lockstep with the digest.
 fn render_condition(expr: &InnerExpr) -> String {
-    let rendered = markdown::render(&RuleNode::RejectIf {
+    let rendered = markdown::render(&RuleNode::<()>::RejectIf {
         rule: crate::policy::RuleId::new("__inline__"),
         condition: expr.clone(),
         reason: crate::policy::Reason::literal(""),
@@ -138,7 +138,7 @@ mod tests {
             Expr::<QtyT>::lit(Qty::new(rust_decimal::Decimal::from(100))),
         )
         .into_inner();
-        let rule = RuleNode::RejectIf {
+        let rule: RuleNode = RuleNode::RejectIf {
             rule: RuleId::new("orders.too_large"),
             condition,
             reason: Reason::literal("nope"),
