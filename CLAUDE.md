@@ -102,6 +102,31 @@ These are non-negotiable:
 - _Examples ARE e2e tests._ No `examples/<name>/tests/` subdir. Each example
   crate has `src/lib.rs` (wiring) + `src/main.rs` (runner) with `#[cfg(test)]`
   modules in the lib for assertions / mocks. Run with `cargo test -p <name>`.
+- _Modularity and extensibility are core, load-bearing properties._ Adopters
+  must be able to swap any framework abstraction without forking. Concretely,
+  this means:
+  - _Trait surfaces over concrete types._ Wherever the framework would otherwise
+    hard-code a venue, transport, storage, or strategy, it defines a trait and
+    ships a default impl in an adapter crate. Anything an adopter might
+    reasonably want to replace must be a trait.
+  - _Generic over key types._ Where the framework needs identifier types
+    (instrument keys, venue keys, order ids, etc.), expose them as type
+    parameters with sensible defaults. Adopters who index differently override;
+    the common case stays ergonomic.
+  - _Lifecycle hooks._ On-disconnect, on-shutdown, on-trading-disabled, and
+    similar transitions are exposed as trait methods adopters implement, not
+    framework-internal behavior.
+  - _Pluggable concerns separated, not conflated._ Strategy generation, risk
+    filtering, and cleanup are distinct traits that compose. Sources, Feeds, and
+    TradingVenues compose freely. A "swap real venue for paper venue" or "swap
+    ws Source for polling Source" must be a one-line change.
+  - _Audit / telemetry as first-class output._ Reactor invocations should be
+    able to emit a typed audit record per event so adopters can wire their own
+    observability without forking.
+
+  If you find yourself adding a framework abstraction that bakes in a specific
+  venue / storage / strategy / transport, _stop_. Make it a trait with a default
+  impl in an adapter crate.
 
 ## Workflow
 

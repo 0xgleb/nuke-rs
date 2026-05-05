@@ -19,9 +19,35 @@ crates — see [ROADMAP.md](ROADMAP.md).
 
 nuke-rs is **not** a trading-only or crypto-only framework. The framework crates
 carry no blockchain / exchange specifics. EVM, SVM, CEX adapters live
-exclusively in `examples/*` and `adapters/*`. The framework knows only abstract
-traits (`Source<E>`, `TradingVenue<...>`, `Job<Ctx>`, `Reactor`, `EventSourced`)
-plus the eDSL and the apalis + cqrs-es runtime substrate.
+exclusively in `examples/*` and adapter crates under `crates/*` (e.g.
+`crates/evm/`). The framework knows only abstract traits (`Source<E>`,
+`TradingVenue<...>`, `Job<Ctx>`, `Reactor`, `EventSourced`) plus the eDSL and
+the apalis + cqrs-es runtime substrate.
+
+## Core design properties
+
+**Modularity and extensibility are load-bearing, not nice-to-haves.** Every
+abstraction in the framework is meant to be replaced or extended without
+forking. Concretely:
+
+- _Trait surfaces over concrete types._ Anything an adopter might reasonably
+  want to swap (venue, transport, storage, strategy, audit format) is a trait,
+  with default impls shipped in adapter crates.
+- _Generic over key types._ Identifier types (instrument, venue, order id) are
+  type parameters with sensible defaults; adopters who index differently
+  override.
+- _Lifecycle hooks._ On-disconnect, on-shutdown, on-trading-disabled and similar
+  transitions are exposed as trait methods rather than buried in framework
+  internals.
+- _Concerns separated, not conflated._ Strategy generation, risk filtering, and
+  cleanup are distinct traits that compose. Sources, Feeds, and TradingVenues
+  compose freely so swapping a real venue for a paper venue or a ws Source for a
+  polling Source is a one-line change.
+- _Audit / telemetry as first-class output._ Reactors emit typed audit records
+  per event so adopters can wire their own observability without forking.
+
+The same invariant lives, in operational form, in
+[CLAUDE.md](CLAUDE.md#hard-invariants).
 
 ## Architecture in one diagram
 
