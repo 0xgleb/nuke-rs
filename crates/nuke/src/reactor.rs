@@ -15,8 +15,8 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
+use crate::dep::{DepList, Dependent};
 use crate::job::Job;
-use crate::subscribed::{DepList, Dependent};
 
 /// Event reactor with exhaustive compile-time-checked handling.
 ///

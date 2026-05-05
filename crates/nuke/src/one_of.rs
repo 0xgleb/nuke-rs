@@ -7,7 +7,7 @@
 use std::future::Future;
 use std::pin::Pin;
 
-use crate::subscribed::Never;
+use crate::dep::Never;
 
 /// Discriminated union of dep events, computed from a type-level
 /// dep list. See [`DepList`](crate::DepList).
