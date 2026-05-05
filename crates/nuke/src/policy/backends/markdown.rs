@@ -1,6 +1,5 @@
-//! Markdown digest backend — renders a `RuleNode` into the
-//! human-readable form compliance signs off on. Field paths render via
-//! the `derive(Domain)`-registered names; structural diffs of the
+//! Markdown digest backend - renders a `RuleNode` into the
+//! human-readable form compliance signs off on. Structural diffs of the
 //! generated markdown become free changelogs across rule revisions.
 
 use std::fmt::Write;
@@ -35,7 +34,7 @@ fn render_rule(rule: &RuleNode, depth: usize, out: &mut String) {
         } => {
             writeln!(
                 out,
-                "{bullet}- **Reject** `{rule}` when `{}` — _{}_",
+                "{bullet}- **Reject** `{rule}` when `{}` - _{}_",
                 render_expr(condition),
                 render_reason(reason),
             )
@@ -49,7 +48,7 @@ fn render_rule(rule: &RuleNode, depth: usize, out: &mut String) {
         } => {
             writeln!(
                 out,
-                "{bullet}- **Escalate** `{rule}` to `{to}` when `{}` — _{}_",
+                "{bullet}- **Escalate** `{rule}` to `{to}` when `{}` - _{}_",
                 render_expr(condition),
                 render_reason(reason),
             )
@@ -131,11 +130,11 @@ fn render_lit(value: &LitValue) -> String {
 const fn render_cmp_op(op: CmpOp) -> &'static str {
     match op {
         CmpOp::Eq => "=",
-        CmpOp::Ne => "≠",
+        CmpOp::Ne => "!=",
         CmpOp::Lt => "<",
-        CmpOp::Le => "≤",
+        CmpOp::Le => "<=",
         CmpOp::Gt => ">",
-        CmpOp::Ge => "≥",
+        CmpOp::Ge => ">=",
     }
 }
 
@@ -143,7 +142,7 @@ const fn render_bin_op(op: BinOp) -> &'static str {
     match op {
         BinOp::Add => "+",
         BinOp::Sub => "-",
-        BinOp::Mul => "·",
+        BinOp::Mul => "*",
         BinOp::Div => "/",
     }
 }

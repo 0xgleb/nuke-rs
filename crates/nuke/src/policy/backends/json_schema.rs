@@ -1,4 +1,4 @@
-//! JSON Schema backend — emits the minimal Draft 2020-12 schema
+//! JSON Schema backend - emits the minimal Draft 2020-12 schema
 //! describing the context fields a `RuleNode` reads. Any system feeding
 //! the rule must conform to this schema; CI can diff the schema across
 //! revisions.
@@ -13,9 +13,7 @@ use crate::policy::ast::{BinOpExpr, CmpExpr, FieldRef, InnerExpr, LitValue, Rule
 ///
 /// Field types are inferred from any matching `LitValue` literals seen
 /// alongside the field; if no literal disambiguates, the schema falls
-/// back to an unconstrained type. This conservative approach lets the
-/// schema serve as a compile-time-checked contract without needing the
-/// `derive(Domain)` registry at this layer (which is a follow-up).
+/// back to an unconstrained type.
 pub fn render(rule: &RuleNode) -> Value {
     let mut fields: BTreeMap<String, FieldShape> = BTreeMap::new();
     walk_rule(rule, &mut fields);
@@ -79,7 +77,7 @@ impl FieldShape {
         match self.inferred {
             None => self.inferred = Some(other),
             Some(prev) if prev == other => {}
-            Some(_) => self.inferred = None, // conflict → fall back to unconstrained
+            Some(_) => self.inferred = None, // conflict -> fall back to unconstrained
         }
     }
 

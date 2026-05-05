@@ -1,4 +1,4 @@
-//! Backends — folds over [`RuleNode`](crate::policy::ast::RuleNode)
+//! Backends - folds over [`RuleNode`](crate::policy::ast::RuleNode)
 //! that produce something other than a [`Decision`](crate::policy::Decision).
 //!
 //! Each backend is independent and can be enabled/extended without

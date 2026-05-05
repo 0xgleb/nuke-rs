@@ -1,4 +1,4 @@
-//! Mermaid backend — emits a flowchart of a `RuleNode` for visual
+//! Mermaid backend -emits a flowchart of a `RuleNode` for visual
 //! review. Helps catch dead branches and surface the rule's overall
 //! shape at a glance.
 
@@ -56,7 +56,7 @@ fn walk(rule: &RuleNode, prev: String, counter: &mut usize, out: &mut String) ->
                 out,
                 "    {id}([{}])",
                 escape(&format!(
-                    "Escalate {rule} → {to}: {}",
+                    "Escalate {rule} -> {to}: {}",
                     render_condition(condition)
                 )),
             )
@@ -99,12 +99,12 @@ fn render_condition(expr: &InnerExpr) -> String {
         condition: expr.clone(),
         reason: crate::policy::Reason::literal(""),
     });
-    // Extract the `when ...` part from "Reject ... when X — _..._"
+    // Extract the `when ...` part from "Reject ... when X -_..._"
     rendered
         .lines()
         .next()
         .and_then(|line| line.split_once("when `"))
-        .and_then(|(_, rest)| rest.split_once("` —"))
+        .and_then(|(_, rest)| rest.split_once("` -"))
         .map_or_else(|| rendered.trim().to_owned(), |(left, _)| left.to_owned())
 }
 
