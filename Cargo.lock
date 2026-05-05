@@ -3140,6 +3140,7 @@ dependencies = [
  "async-trait",
  "backon",
  "ciborium",
+ "event-sorcery",
  "futures-util",
  "linkme",
  "nuke-derive",

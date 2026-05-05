@@ -19,10 +19,10 @@ use apalis::prelude::{Data, PipeExt, WorkerBuilder};
 use apalis_core::backend::dequeue;
 use futures_util::{Stream, StreamExt, stream};
 
-use crate::dep::DepList;
 use crate::error::{Error, Result};
 use crate::job::work;
 use crate::reactor::Reactor;
+use event_sorcery::DepList;
 
 /// Drive `reactor` to convergence: consume `events` (typed event
 /// union matching the reactor's subject list), invoke `reactor.react`

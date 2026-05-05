@@ -120,19 +120,6 @@ where
     }
 }
 
-/// Uninhabited error type -use as `EventSourced::Error` for entities
-/// whose operations never fail.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-pub enum Never {}
-
-impl std::fmt::Display for Never {
-    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match *self {}
-    }
-}
-
-impl std::error::Error for Never {}
-
 /// Convenience to convert a raw `LifecycleError` into an
 /// `AggregateError`.
 impl<E: EventSourced> From<LifecycleError<E>> for AggregateError<LifecycleError<E>> {
@@ -269,7 +256,7 @@ mod tests {
     fn never_is_uninhabited() {
         // `Never` has no constructors - this test exists to lock in
         // that property as intentional.
-        let never: Option<Never> = None;
+        let never: Option<crate::Never> = None;
         assert!(never.is_none());
     }
 }

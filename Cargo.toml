@@ -19,6 +19,7 @@ license = "MIT OR Apache-2.0"
 # each other in without version juggling during the split.
 nuke = { path = "crates/nuke", version = "0.1.0" }
 nuke-derive = { path = "crates/nuke-derive", version = "0.1.0" }
+event-sorcery = { path = "crates/event-sorcery", version = "0.1.0" }
 
 # Type-level + async core
 async-trait = "0.1.83"
