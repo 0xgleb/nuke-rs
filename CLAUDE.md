@@ -127,6 +127,19 @@ These are non-negotiable:
   If you find yourself adding a framework abstraction that bakes in a specific
   venue / storage / strategy / transport, _stop_. Make it a trait with a default
   impl in an adapter crate.
+- _Never bypass quality checks._ Don't disable lints, suppress warnings, skip
+  tests, or weaken any gate to make the build pass. That includes:
+  - `#[allow(...)]` / `#![allow(...)]` to silence clippy or rustc warnings.
+  - `cargo ... -- --allow ...` or any other CLI lint-level relaxation.
+  - `--no-verify` on `git commit` / `git push` (skips pre-commit hooks).
+  - `#[ignore]` on tests, conditional skips, weakened assertions.
+  - Lint-config exceptions in `Cargo.toml` / `clippy.toml` / `rustfmt.toml`.
+  - Adding files to `.gitignore` to hide them from review.
+
+  Treat every clippy warning, rustc warning, hook failure, or test failure as a
+  bug to fix at the source. Dead code? Use it or delete it. Unused import?
+  Remove it. Failing test? Make it pass. The lint is right by default; if it
+  isn't, restructure the code so the lint stops triggering, not suppress it.
 
 ## Workflow
 

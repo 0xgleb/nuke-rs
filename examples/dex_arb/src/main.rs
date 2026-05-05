@@ -26,6 +26,8 @@ use alloy_sol_types::sol;
 use evm::{EvmSubject, EvmWsSource};
 use nuke::prelude::*;
 use nuke::{Job, Label, Validator, validate};
+
+mod verbs;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
 use serde::{Deserialize, Serialize};
@@ -280,6 +282,23 @@ fn check(
 #[tokio::main]
 async fn main() -> nuke::Result<()> {
     nuke::tracing::init();
+
+    // Log the verb KINDs the strategy compiler can lower for this
+    // example. Once the per-node verdict-layer decomposition lands,
+    // these show up wired into the apalis DAG; today they exist as
+    // typed Action surfaces so a strategy author can construct
+    // `policy! { ... do Buy { ... } }` trees that compile.
+    use nuke::policy::Action;
+    use verbs::{Buy, Sell, Short, Transfer};
+    ::tracing::info!(
+        verbs = ?[
+            <Buy::<evm::EvmRpcVenue> as Action>::KIND,
+            <Sell::<evm::EvmRpcVenue> as Action>::KIND,
+            <Short::<evm::EvmRpcVenue> as Action>::KIND,
+            <Transfer::<evm::EvmChain, evm::EvmChain> as Action>::KIND,
+        ],
+        "registered verbs",
+    );
 
     let secrets = SecretSpec::builder()
         .load()
