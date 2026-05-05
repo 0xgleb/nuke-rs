@@ -1,0 +1,7 @@
+error[E0599]: no method named `exhaustive` found for enum `Fold<Pin<Box<dyn Future<Output = {integer}> + Send>>, OneOf<(String, ()), nuke::Never>>` in the current scope
+  --> tests/compile_fail/non_exhaustive_on_chain.rs:63:25
+   |
+63 |     let _result = _fold.exhaustive();
+   |                         ^^^^^^^^^^ method not found in `Fold<Pin<Box<dyn Future<Output = {integer}> + Send>>, OneOf<(String, ()), nuke::Never>>`
+   |
+   = note: the method was found for `Fold<T, nuke::Never>`

@@ -1,11 +1,86 @@
-[package]
-name = "rust-nix"
+[workspace]
+resolver = "3"
+members = [
+  "crates/nuke",
+  "crates/nuke-derive",
+  "crates/evm",
+  "crates/evm-derive",
+  "examples/dex_arb",
+]
+
+[workspace.package]
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+license = "MIT OR Apache-2.0"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[workspace.dependencies]
+# Internal crates — referenced by path so workspace members can pull
+# each other in without version juggling during the split.
+nuke = { path = "crates/nuke", version = "0.1.0" }
+nuke-derive = { path = "crates/nuke-derive", version = "0.1.0" }
 
-[dependencies]
-clap = { version = "4.6.1", features = ["derive", "env"] }
+# Type-level + async core
+async-trait = "0.1.83"
+thiserror = "2.0"
+futures-util = { version = "0.3", default-features = false, features = [
+  "std",
+  "sink",
+] }
+tokio = { version = "1.41", features = [
+  "macros",
+  "rt-multi-thread",
+  "sync",
+  "time",
+  "net",
+] }
+tokio-stream = "0.1"
+
+# WebSocket transport
+tokio-tungstenite = "0.29.0"
+
+# JSON-RPC framing + general SerDe
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Tower-style middleware
+tower = { version = "0.5.3", default-features = false, features = ["util"] }
+
+# Job execution — apalis 1.x. Internal to the framework; never exposed
+# in the public API per CLAUDE.md.
+apalis = "=1.0.0-rc.7"
+apalis-core = "=1.0.0-rc.7"
+apalis-workflow = "=0.1.0-rc.7"
+
+# EVM types (used by the `evm` adapter crate; framework crates do not depend on these)
+alloy-primitives = { version = "1.5", features = ["serde"] }
+alloy-sol-types = "1.5"
+
+# Domain primitives — Decimal everywhere, never f64 (see CLAUDE.md).
+rust_decimal = { version = "1.41", features = ["serde"] }
+
+# Rule registry: distributed-slice registration.
+linkme = "0.3.36"
+
+# eDSL backends: CBOR + SHA-2 for the versioned wire format.
+ciborium = "0.2.2"
+sha2 = "0.11.0"
+
+# Persistence layer — cqrs-es event-sourced bridge.
+cqrs-es = "0.4.12"
+
+# Observability
 tracing = "0.1.44"
-tracing-subscriber = "0.3.23"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+
+# Secrets (consumed by examples, not by framework crates)
+secretspec = "0.8.2"
+secretspec-derive = "0.8.2"
+secrecy = "0.10.3"
+
+# Proc-macro internals (used by nuke-derive)
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full", "extra-traits"] }
+
+# Test deps
+trybuild = "1.0.116"
