@@ -76,14 +76,8 @@ fn render_rule(rule: &RuleNode, depth: usize, out: &mut String) {
             .ok();
             render_rule(then, depth, out);
         }
-        RuleNode::Run(spec) => {
-            let captures = spec
-                .captures
-                .iter()
-                .map(|name| format!("${name}"))
-                .collect::<Vec<_>>()
-                .join(", ");
-            writeln!(out, "{bullet}- **Run** `{}` with [{captures}]", spec.label).ok();
+        RuleNode::Do(action) => {
+            writeln!(out, "{bullet}- **Do** `{}`", action.kind()).ok();
         }
     }
 }

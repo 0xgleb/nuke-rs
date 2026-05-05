@@ -93,23 +93,14 @@ macro_rules! bind_as {
     };
 }
 
-/// Build a [`RuleNode::Run`](crate::policy::ast::RuleNode::Run) - a
-/// side-effect leaf that queues the named [`crate::Job`] when reached
-/// without short-circuit. Optionally captures the listed slots into
-/// the action's payload.
+/// Build a [`RuleNode::Do`](crate::policy::ast::RuleNode::Do) leaf
+/// from a typed [`Action`](crate::policy::action::Action) value. The
+/// action is boxed and erased; the surrounding compiler later asks
+/// it to lower itself into a sub-DAG.
 #[macro_export]
-macro_rules! run {
-    ( $label:literal $(,)? ) => {
-        $crate::policy::ast::RuleNode::Run($crate::policy::ast::ActionSpec::new(
-            $crate::Label::new($label),
-            ::std::vec::Vec::new(),
-        ))
-    };
-    ( $label:literal, with [ $($slot:literal),+ $(,)? ] $(,)? ) => {
-        $crate::policy::ast::RuleNode::Run($crate::policy::ast::ActionSpec::new(
-            $crate::Label::new($label),
-            ::std::vec![$($crate::policy::SlotName($slot)),+],
-        ))
+macro_rules! do_action {
+    ( $action:expr $(,)? ) => {
+        $crate::policy::ast::RuleNode::Do(::std::boxed::Box::new($action))
     };
 }
 
@@ -136,11 +127,8 @@ macro_rules! policy {
     ( bind $name:literal = $expr:expr, then $body:expr $(,)? ) => {
         $crate::bind_as!($name = $expr, then $body)
     };
-    ( run $label:literal $(,)? ) => {
-        $crate::run!($label)
-    };
-    ( run $label:literal, with [ $($slot:literal),+ $(,)? ] $(,)? ) => {
-        $crate::run!($label, with [$($slot),+])
+    ( do $action:expr $(,)? ) => {
+        $crate::do_action!($action)
     };
 }
 

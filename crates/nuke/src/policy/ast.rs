@@ -22,7 +22,7 @@ use rust_decimal::Decimal;
 use serde::Serialize;
 
 use crate::domain::{Notional, Px, Qty, Side, Symbol};
-use crate::job::Label;
+use crate::policy::action::ErasedAction;
 use crate::policy::decision::{EscalationTarget, RuleId};
 use crate::policy::reason::{Reason, SlotName};
 
@@ -385,38 +385,20 @@ pub enum RuleNode {
         expr: InnerExpr,
         then: Box<RuleNode>,
     },
-    /// Side-effect point: queue an action (a [`crate::Job`]) to be
-    /// executed if the rule reaches this leaf without `Deny` or
-    /// `Escalate`. The DAG compiler maps each `Run` to one apalis
-    /// node downstream of any predicate gates that lead to it; the
-    /// runtime evaluator accumulates them into the [`Outcome`] it
-    /// returns. The action's payload is built from previously-`Bind`ed
-    /// slots named in `captures` - keeping side effects in the AST
-    /// (rather than as Rust closures the caller passes alongside) is
-    /// what lets the SMT / SQL / mermaid / etc. backends reason about
-    /// what a policy *does*, not just what it permits.
+    /// Side-effect leaf: invoke a typed verb (an [`Action`] impl) when
+    /// the rule reaches this leaf without `Deny` or `Escalate`. The
+    /// DAG compiler asks the action to lower itself into a sub-DAG
+    /// of nodes (construct -> risk-check -> sign -> submit ->
+    /// wait-for-fill -> emit) and stitches that sub-DAG into the
+    /// surrounding policy DAG via predicate-gate edges.
     ///
-    /// [`Outcome`]: crate::policy::Outcome
-    Run(ActionSpec),
-}
-
-/// A side-effect action to enqueue when an [`RuleNode::Run`] node is
-/// reached.
-///
-/// `label` names the [`crate::Job`] to invoke; `captures` lists the
-/// bound slots (from prior [`RuleNode::Bind`]s) that should travel
-/// with the action as its payload. Static metadata only - no
-/// closures, so every backend can render or analyze the action.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct ActionSpec {
-    pub label: Label,
-    pub captures: Vec<SlotName>,
-}
-
-impl ActionSpec {
-    pub fn new(label: Label, captures: Vec<SlotName>) -> Self {
-        Self { label, captures }
-    }
+    /// `Box<dyn ErasedAction>` is the type-object form so a single
+    /// rule tree can mix verbs of different output types
+    /// (e.g. `Buy<V>` and `Transfer<F, T>`); the typed surface lives
+    /// on [`Action`] and adopters extend the DSL by implementing it.
+    ///
+    /// [`Action`]: crate::policy::action::Action
+    Do(Box<dyn ErasedAction>),
 }
 
 // ---------------------------------------------------------------------

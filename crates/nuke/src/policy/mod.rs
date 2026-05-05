@@ -7,6 +7,7 @@
 //!   `Deny`/`Escalate` so verdicts are self-explanatory and reproducible.
 //! - [`RuleId`] - interned `&'static str` rule identifier.
 
+pub mod action;
 pub mod ast;
 pub mod backends;
 pub mod capability;
@@ -16,6 +17,7 @@ mod macros;
 mod reason;
 pub mod registry;
 
+pub use action::{Action, DagBuilder, ErasedAction, NodeHandle};
 pub use capability::{Capability, Context, HasInventory, HasMarketData, HasOrder, HasRiskLimits};
 
 pub use ast::{

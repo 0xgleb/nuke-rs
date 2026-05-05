@@ -48,7 +48,7 @@ fn rule_to_tla(rule: &RuleNode) -> String {
         // `Run` is not a logical assertion. It contributes `TRUE` to
         // the predicate so the surrounding conjunction / disjunction
         // structure stays well-formed.
-        RuleNode::Run(_) => "TRUE".to_string(),
+        RuleNode::Do(_) => "TRUE".to_string(),
     }
 }
 

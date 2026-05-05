@@ -65,7 +65,7 @@ fn leaf_count(rule: &RuleNode) -> usize {
         RuleNode::All(rules) | RuleNode::Any(rules) => rules.iter().map(leaf_count).sum(),
         // Side-effect leaves count as a leaf for diff purposes too -
         // adding or removing one is a meaningful behavioral change.
-        RuleNode::Run(_) => 1,
+        RuleNode::Do(_) => 1,
     }
 }
 
@@ -81,7 +81,7 @@ fn predicate_complexity(rule: &RuleNode) -> usize {
         RuleNode::Bind { expr, then, .. } => expr_size(expr) + predicate_complexity(then),
         // `Run` carries no predicate and contributes zero predicate
         // complexity (its captures are just slot references).
-        RuleNode::Run(_) => 0,
+        RuleNode::Do(_) => 0,
     }
 }
 

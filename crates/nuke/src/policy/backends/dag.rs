@@ -1,9 +1,10 @@
 //! Compile a [`RuleNode`] to a directed acyclic graph of nodes
 //! suitable for running on `apalis_workflow::DagFlow`.
 //!
-//! The compilation walks the AST and emits a [`DagPlan`]: a flat list
-//! of [`DagNode`]s plus their parent edges. The plan is intentionally
-//! materialization-agnostic - every backend can render it (mermaid
+//! The compilation walks the AST and builds a [`DagPlan`] (a flat
+//! list of [`DagNode`]s plus parent->child edges) via the
+//! [`DagBuilder`](crate::policy::DagBuilder) surface. The plan is
+//! materialization-agnostic: every backend can render it (mermaid
 //! visualization, debugging, golden tests, ...) without standing up
 //! an apalis worker. A separate materialization layer (in adapter
 //! crates or in the example wiring) walks the plan and registers each
@@ -15,9 +16,10 @@
 //! - [`RuleNode::RejectIf`] / [`RuleNode::EscalateIf`] - one
 //!   [`DagNode::Predicate`] node per leaf. Reaching it with the
 //!   condition true emits a terminal verdict.
-//! - [`RuleNode::Run`] - one [`DagNode::Action`] node per leaf. Only
-//!   reachable on the Allow path; materialization wires it to the
-//!   reactor's [`crate::Job`] of matching label.
+//! - [`RuleNode::Do`] - the action's
+//!   [`Action::lower`](crate::policy::action::Action::lower) is
+//!   called, splicing the verb's sub-DAG into the plan. The action's
+//!   terminal node is the one downstream nodes depend on.
 //! - [`RuleNode::Given`] - one [`DagNode::Guard`] node carrying the
 //!   guard conditions, gating its `then` subtree.
 //! - [`RuleNode::Bind`] - one [`DagNode::Bind`] node feeding its
@@ -28,21 +30,21 @@
 //!
 //! Edges flow parent -> child. The plan's [`DagPlan::root`] is the
 //! entry node; sinks (nodes with no outgoing edges) are the
-//! terminals. Topological ordering is preserved by the construction
-//! order of the [`DagPlan::nodes`] vector.
+//! terminals.
 
-use crate::policy::ast::{ActionSpec, InnerExpr, RuleNode};
+use crate::policy::action::DagBuilder;
+use crate::policy::ast::{InnerExpr, RuleNode};
 use crate::policy::decision::{EscalationTarget, RuleId};
 use crate::policy::reason::{Reason, SlotName};
 
 /// Index into [`DagPlan::nodes`] - opaque handle for an emitted node.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct NodeId(pub usize);
 
 /// Compiled DAG: nodes plus parent->child edges. Self-contained; can
 /// be inspected, golden-tested, or materialized into an apalis
 /// `DagFlow` independently.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct DagPlan {
     pub nodes: Vec<DagNode>,
     pub edges: Vec<Edge>,
@@ -67,27 +69,32 @@ pub enum DagNode {
     /// guarded subtree short-circuits to Allow.
     Guard { conditions: Vec<InnerExpr> },
     /// A predicate leaf that emits a terminal verdict when its
-    /// condition holds. `kind` distinguishes [`Verdict::Reject`] from
-    /// [`Verdict::Escalate`].
+    /// condition holds. `verdict` distinguishes [`Verdict::Reject`]
+    /// from [`Verdict::Escalate`].
     Predicate {
         rule: RuleId,
         condition: InnerExpr,
         verdict: Verdict,
         reason: Reason,
     },
-    /// A side-effect leaf that enqueues a [`crate::Job`] when reached
-    /// without short-circuit. Materializers look up the job by
-    /// `spec.label` against the reactor's job registry.
-    Action(ActionSpec),
     /// Captures `expr` into the bindings table under `name` so
     /// downstream nodes (predicates, actions, other binds) can
     /// reference it via `InnerExpr::Slot(name)`.
     Bind { name: SlotName, expr: InnerExpr },
-    /// A composition node combining multiple branch subtrees. `kind`
-    /// distinguishes the semantic ([`CombinatorKind::All`] vs
-    /// [`CombinatorKind::Any`]); branch subtree entry nodes are
+    /// A composition node combining multiple branch subtrees.
+    /// `kind` distinguishes the semantic ([`CombinatorKind::All`]
+    /// vs [`CombinatorKind::Any`]); branch subtree entry nodes are
     /// reachable via the [`DagPlan::edges`] outgoing from this node.
     Combinator { kind: CombinatorKind },
+    /// One step within an [`Action`](crate::policy::action::Action)'s
+    /// lowered sub-DAG. The verb's `KIND` and a step name are
+    /// preserved for audit / rendering; the actual execution
+    /// behavior is defined by the [`Action`] impl that emitted this
+    /// node and is wired in at materialization time.
+    ActionStep {
+        action_kind: &'static str,
+        step: &'static str,
+    },
 }
 
 /// What a [`DagNode::Predicate`] emits when its condition holds.
@@ -110,106 +117,126 @@ pub enum CombinatorKind {
 
 /// Walk a [`RuleNode`] and emit a [`DagPlan`].
 pub fn compile(rule: &RuleNode) -> DagPlan {
-    let mut plan = DagPlan {
-        nodes: Vec::new(),
-        edges: Vec::new(),
-        root: NodeId(0),
-    };
-    plan.root = walk(rule, &mut plan);
-    plan
+    let mut builder = DagBuilder::new();
+    let root = walk(rule, &mut builder);
+    builder.set_root(root);
+    builder.finish()
 }
 
-fn walk(rule: &RuleNode, plan: &mut DagPlan) -> NodeId {
+fn walk(rule: &RuleNode, builder: &mut DagBuilder) -> NodeId {
     match rule {
         RuleNode::Given { conditions, then } => {
-            let id = push(
-                plan,
-                DagNode::Guard {
+            let id = builder
+                .add_node::<()>(DagNode::Guard {
                     conditions: conditions.clone(),
-                },
-            );
-            let child = walk(then, plan);
-            plan.edges.push(Edge {
-                from: id,
-                to: child,
-            });
+                })
+                .id;
+            let child = walk(then, builder);
+            push_edge(builder, id, child);
             id
         }
         RuleNode::RejectIf {
             rule,
             condition,
             reason,
-        } => push(
-            plan,
-            DagNode::Predicate {
-                rule: *rule,
-                condition: condition.clone(),
-                verdict: Verdict::Reject,
-                reason: reason.clone(),
-            },
-        ),
+        } => {
+            builder
+                .add_node::<()>(DagNode::Predicate {
+                    rule: *rule,
+                    condition: condition.clone(),
+                    verdict: Verdict::Reject,
+                    reason: reason.clone(),
+                })
+                .id
+        }
         RuleNode::EscalateIf {
             rule,
             condition,
             to,
             reason,
-        } => push(
-            plan,
-            DagNode::Predicate {
-                rule: *rule,
-                condition: condition.clone(),
-                verdict: Verdict::Escalate(*to),
-                reason: reason.clone(),
-            },
-        ),
+        } => {
+            builder
+                .add_node::<()>(DagNode::Predicate {
+                    rule: *rule,
+                    condition: condition.clone(),
+                    verdict: Verdict::Escalate(*to),
+                    reason: reason.clone(),
+                })
+                .id
+        }
         RuleNode::All(branches) | RuleNode::Any(branches) => {
             let kind = match rule {
                 RuleNode::All(_) => CombinatorKind::All,
                 RuleNode::Any(_) => CombinatorKind::Any,
                 _ => unreachable!(),
             };
-            let id = push(plan, DagNode::Combinator { kind });
-            let child_ids: Vec<NodeId> = branches.iter().map(|sub| walk(sub, plan)).collect();
-            plan.edges
-                .extend(child_ids.into_iter().map(|to| Edge { from: id, to }));
+            let id = builder.add_node::<()>(DagNode::Combinator { kind }).id;
+            for sub in branches {
+                let child = walk(sub, builder);
+                push_edge(builder, id, child);
+            }
             id
         }
         RuleNode::Bind { name, expr, then } => {
-            let id = push(
-                plan,
-                DagNode::Bind {
+            let id = builder
+                .add_node::<()>(DagNode::Bind {
                     name: *name,
                     expr: expr.clone(),
-                },
-            );
-            let child = walk(then, plan);
-            plan.edges.push(Edge {
-                from: id,
-                to: child,
-            });
+                })
+                .id;
+            let child = walk(then, builder);
+            push_edge(builder, id, child);
             id
         }
-        RuleNode::Run(spec) => push(plan, DagNode::Action(spec.clone())),
+        RuleNode::Do(action) => action.lower_erased(builder),
     }
 }
 
-fn push(plan: &mut DagPlan, node: DagNode) -> NodeId {
-    let id = NodeId(plan.nodes.len());
-    plan.nodes.push(node);
-    id
+fn push_edge(builder: &mut DagBuilder, from: NodeId, to: NodeId) {
+    use crate::policy::action::NodeHandle;
+    // The edge API is typed; for compiler-internal stitching the
+    // framework-known node kinds carry no meaningful output type,
+    // so we reuse the typed API with `NodeHandle<()>`.
+    builder.depend(
+        NodeHandle::<()>::from_id(from),
+        NodeHandle::<()>::from_id(to),
+    );
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Label;
     use crate::domain::Qty;
+    use crate::policy::action::{Action, NodeHandle};
     use crate::policy::ast::{Expr, QtyT, field, gt, lt};
     use crate::policy::reason::Reason;
     use rust_decimal::Decimal;
 
     fn d(value: i64) -> Decimal {
         Decimal::from(value)
+    }
+
+    /// Sample Action used in the tests: lowers to two ActionSteps
+    /// (construct + submit) connected by an edge.
+    #[derive(Debug, Clone)]
+    struct Submit;
+
+    impl Action for Submit {
+        const KIND: &'static str = "test.submit";
+        type Output = ();
+
+        fn lower(&self, dag: &mut DagBuilder) -> NodeHandle<Self::Output> {
+            let construct = dag.add_node::<()>(DagNode::ActionStep {
+                action_kind: Self::KIND,
+                step: "construct",
+            });
+            let submit = dag.add_node::<()>(DagNode::ActionStep {
+                action_kind: Self::KIND,
+                step: "submit",
+            });
+            dag.depend(construct, submit);
+            submit
+        }
     }
 
     #[test]
@@ -239,7 +266,7 @@ mod tests {
     }
 
     #[test]
-    fn given_then_run_yields_guard_then_action_with_one_edge() {
+    fn given_then_do_splices_action_subdag_under_guard() {
         let rule = RuleNode::Given {
             conditions: vec![
                 gt(
@@ -248,25 +275,39 @@ mod tests {
                 )
                 .into_inner(),
             ],
-            then: Box::new(RuleNode::Run(ActionSpec::new(
-                Label::new("submit"),
-                vec![SlotName("notional")],
-            ))),
+            then: Box::new(RuleNode::Do(Box::new(Submit))),
         };
 
         let plan = compile(&rule);
 
-        assert_eq!(plan.nodes.len(), 2);
-        assert_eq!(plan.edges.len(), 1);
+        // Guard at 0; Submit lowers to 2 ActionSteps with one
+        // internal edge; one edge from Guard to action root.
+        assert_eq!(plan.nodes.len(), 3);
+        assert_eq!(plan.edges.len(), 2);
         assert_eq!(plan.root, NodeId(0));
         assert!(matches!(&plan.nodes[0], DagNode::Guard { .. }));
-        assert!(matches!(&plan.nodes[1], DagNode::Action(_)));
-        assert_eq!(
-            plan.edges[0],
-            Edge {
-                from: NodeId(0),
-                to: NodeId(1)
+        assert!(matches!(
+            &plan.nodes[1],
+            DagNode::ActionStep {
+                step: "construct",
+                ..
             }
+        ));
+        assert!(matches!(
+            &plan.nodes[2],
+            DagNode::ActionStep { step: "submit", .. }
+        ));
+        // Internal action edge: construct -> submit.
+        assert!(
+            plan.edges
+                .iter()
+                .any(|e| e.from == NodeId(1) && e.to == NodeId(2))
+        );
+        // Stitch edge: Guard -> action terminal (submit).
+        assert!(
+            plan.edges
+                .iter()
+                .any(|e| e.from == NodeId(0) && e.to == NodeId(2))
         );
     }
 
@@ -281,7 +322,7 @@ mod tests {
             .into_inner(),
             reason: Reason::literal("first"),
         };
-        let r2 = RuleNode::Run(ActionSpec::new(Label::new("act"), vec![]));
+        let r2 = RuleNode::Do(Box::new(Submit));
         let rule = RuleNode::All(vec![r1, r2]);
 
         let plan = compile(&rule);
@@ -297,20 +338,15 @@ mod tests {
     }
 
     #[test]
-    fn run_node_carries_action_spec_with_captures() {
-        let rule = RuleNode::Run(ActionSpec::new(
-            Label::new("emit"),
-            vec![SlotName("a"), SlotName("b")],
-        ));
+    fn do_node_terminal_is_action_terminal() {
+        let rule = RuleNode::Do(Box::new(Submit));
 
         let plan = compile(&rule);
 
-        match &plan.nodes[0] {
-            DagNode::Action(spec) => {
-                assert_eq!(spec.label, Label::new("emit"));
-                assert_eq!(spec.captures, vec![SlotName("a"), SlotName("b")]);
-            }
-            other => panic!("expected Action, got {other:?}"),
-        }
+        // The action lowers to construct + submit; the root is
+        // the action's *terminal* (submit), not the construct
+        // step. (`Action::lower` returns the terminal handle.)
+        assert_eq!(plan.nodes.len(), 2);
+        assert_eq!(plan.root, NodeId(1));
     }
 }

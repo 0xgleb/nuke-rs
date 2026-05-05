@@ -43,7 +43,7 @@ fn rule_to_sql(rule: &RuleNode) -> String {
         // pull the rows that *would* trigger a verdict; an action
         // node carries no condition of its own, so it contributes
         // `TRUE` (any row at this branch's gates fires the action).
-        RuleNode::Run(_) => "TRUE".to_string(),
+        RuleNode::Do(_) => "TRUE".to_string(),
     }
 }
 
