@@ -2,6 +2,9 @@
 .devenv
 .direnv
 .pre-commit-config.yaml
+# `nix build` output symlinks
+result
+result-*
 
 # Rust
 /target
