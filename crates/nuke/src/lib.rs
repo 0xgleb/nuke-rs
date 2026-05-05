@@ -30,21 +30,27 @@ pub mod error;
 pub mod policy;
 pub mod tracing;
 
+mod feed;
 mod has_subject;
+mod ledger;
 mod macros;
 mod one_of;
 mod reactor;
 mod subject;
 mod subscribed;
+mod venue;
 
 pub use apalis::{PipelineError, pump_through_apalis};
 pub use error::{Error, Result};
+pub use feed::{Feed, FeedStream};
 pub use has_subject::HasSubject;
+pub use ledger::Ledger;
 pub use nuke_derive::Domain;
 pub use one_of::{Fold, OneOf};
 pub use reactor::Reactor;
 pub use subject::Subject;
 pub use subscribed::{Cons, Never, Nil, SubjectList, Subscribed};
+pub use venue::{TradingVenue, Venue};
 
 /// Re-exports used by macro expansions. Not part of the supported API.
 #[doc(hidden)]
