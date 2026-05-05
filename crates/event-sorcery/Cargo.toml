@@ -1,0 +1,18 @@
+[package]
+name = "event-sorcery"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Ergonomic typed wrapper around cqrs-es: rich associated-types EventSourced trait + internal Lifecycle adapter providing the Aggregate impl."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+async-trait.workspace = true
+cqrs-es.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

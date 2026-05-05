@@ -1,0 +1,15 @@
+error[E0308]: mismatched types
+  --> tests/compile_fail/wrong_typed_comparison.rs:11:21
+   |
+11 |     let _ = eq(lhs, rhs);
+   |             --      ^^^ expected `Expr<DecT>`, found `Expr<BoolT>`
+   |             |
+   |             arguments to this function are incorrect
+   |
+   = note: expected struct `Expr<DecT>`
+              found struct `Expr<BoolT>`
+note: function defined here
+  --> src/policy/ast.rs
+   |
+   | pub fn eq<T: ExprType>(lhs: Expr<T>, rhs: Expr<T>) -> Expr<BoolT> {
+   |        ^^

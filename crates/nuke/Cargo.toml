@@ -1,0 +1,46 @@
+[package]
+name = "nuke"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "General-purpose event-driven framework. Source / Reactor / Job traits + eDSL + cqrs/es bridge. See repo CLAUDE.md."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+nuke-derive.workspace = true
+
+# Type-level + async core
+async-trait.workspace = true
+thiserror.workspace = true
+futures-util.workspace = true
+tokio = { workspace = true }
+
+# General SerDe (JSON Schema backend, persistence)
+serde.workspace = true
+serde_json.workspace = true
+
+# Apalis (internal, never re-exported)
+apalis.workspace = true
+apalis-core.workspace = true
+apalis-workflow.workspace = true
+
+# Domain primitives
+rust_decimal.workspace = true
+
+# Rule registry: linkme distributed slice for compile-time rule
+# enumeration.
+linkme.workspace = true
+
+# eDSL backend deps: CBOR + SHA-2 for the wire-format backend.
+ciborium.workspace = true
+sha2.workspace = true
+
+# Observability
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+trybuild.workspace = true
