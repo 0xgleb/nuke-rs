@@ -13,16 +13,36 @@
 //! verdict-layer decomposition (the policy walker that currently
 //! only lowers `Do` leaves) is fleshed out.
 
-use std::marker::PhantomData;
 use std::sync::Arc;
 
-use apalis_core::backend::BackendExt;
 use apalis_workflow::DagFlow;
 use apalis_workflow::dag::NodeHandle;
 use evm::EvmChain;
-use nuke::policy::Action;
+use nuke::policy::{Action, DecisionTag};
 use nuke::{Ledger, Order, OrderId, OrderRequest, TradingVenue};
 use serde::{Deserialize, Serialize};
+
+/// Shared closure body for [`Buy`] / [`Sell`] / [`Short`]: gate on
+/// the verdict, otherwise call `venue.place_trade(request)` and map
+/// the outcome into [`OrderResult`].
+async fn submit<V>(verdict: DecisionTag, venue: Arc<V>, request: OrderRequest) -> OrderResult
+where
+    V: TradingVenue<EvmChain, OrderRequest = OrderRequest, OrderId = OrderId, Order = Order>,
+{
+    let request_qty = request.qty;
+    match verdict {
+        DecisionTag::Allow => match venue.place_trade(request).await {
+            Ok(id) => OrderResult::Submitted { id, request_qty },
+            Err(error) => OrderResult::Failed {
+                error: format!("{error}"),
+            },
+        },
+        DecisionTag::Deny => OrderResult::Skipped { verdict: "deny" },
+        DecisionTag::Escalate => OrderResult::Skipped {
+            verdict: "escalate",
+        },
+    }
+}
 
 /// Buy verb: submit an order to a venue. Generic over any
 /// [`TradingVenue<L>`] whose value-object types match the
@@ -71,21 +91,26 @@ where
     V: Send + Sync + 'static,
 {
     const KIND: &'static str = "verb.buy";
-    type Input = OrderRequest;
+    type Input = DecisionTag;
     type Output = OrderResult;
 
-    fn lower<B: BackendExt>(&self, _dag: &DagFlow<B>) -> NodeHandle<Self::Input, Self::Output> {
-        // v0 surface only: the verb compiles, can be embedded in a
-        // `policy! { do Buy { ... } }` construction, and shows up
-        // in audit / mermaid renders by KIND. The real
-        // submit-and-wait sub-DAG (one node calling
-        // `self.venue.place_trade(req)`, a downstream wait-for-fill
-        // node) lands when the per-node verdict-layer decomposition
-        // is wired (the policy walker that currently only lowers
-        // `Do` leaves). Stubbing `unreachable!` keeps the trait
-        // surface honest without forcing the full apalis-workflow
-        // Codec/DagCodec bound chain on every verb.
-        unreachable!("Buy::lower v0 stub - wired in #80 follow-up")
+    fn lower<B, Err>(
+        &self,
+        dag: &DagFlow<B>,
+        gate: &nuke::policy::PolicyGate<'_, B>,
+    ) -> NodeHandle<Self::Input, Self::Output>
+    where
+        B: nuke::policy::LowerBackend<Self::Input, Self::Output, Err>,
+        Err: Into<apalis_core::error::BoxDynError> + Send + 'static,
+    {
+        let venue = Arc::clone(&self.venue);
+        let request = self.request.clone();
+        let entry = nuke::policy::action::add_node(dag, "verb.buy/submit", move |verdict| {
+            let venue = Arc::clone(&venue);
+            let request = request.clone();
+            async move { submit(verdict, venue, request).await }
+        });
+        entry.depends_on(gate.builder())
     }
 }
 
@@ -128,11 +153,26 @@ where
     V: Send + Sync + 'static,
 {
     const KIND: &'static str = "verb.sell";
-    type Input = OrderRequest;
+    type Input = DecisionTag;
     type Output = OrderResult;
 
-    fn lower<B: BackendExt>(&self, _dag: &DagFlow<B>) -> NodeHandle<Self::Input, Self::Output> {
-        unreachable!("Sell::lower v0 stub - wired in #80 follow-up")
+    fn lower<B, Err>(
+        &self,
+        dag: &DagFlow<B>,
+        gate: &nuke::policy::PolicyGate<'_, B>,
+    ) -> NodeHandle<Self::Input, Self::Output>
+    where
+        B: nuke::policy::LowerBackend<Self::Input, Self::Output, Err>,
+        Err: Into<apalis_core::error::BoxDynError> + Send + 'static,
+    {
+        let venue = Arc::clone(&self.venue);
+        let request = self.request.clone();
+        let entry = nuke::policy::action::add_node(dag, "verb.sell/submit", move |verdict| {
+            let venue = Arc::clone(&venue);
+            let request = request.clone();
+            async move { submit(verdict, venue, request).await }
+        });
+        entry.depends_on(gate.builder())
     }
 }
 
@@ -177,11 +217,26 @@ where
     V: Send + Sync + 'static,
 {
     const KIND: &'static str = "verb.short";
-    type Input = OrderRequest;
+    type Input = DecisionTag;
     type Output = OrderResult;
 
-    fn lower<B: BackendExt>(&self, _dag: &DagFlow<B>) -> NodeHandle<Self::Input, Self::Output> {
-        unreachable!("Short::lower v0 stub - wired in #80 follow-up")
+    fn lower<B, Err>(
+        &self,
+        dag: &DagFlow<B>,
+        gate: &nuke::policy::PolicyGate<'_, B>,
+    ) -> NodeHandle<Self::Input, Self::Output>
+    where
+        B: nuke::policy::LowerBackend<Self::Input, Self::Output, Err>,
+        Err: Into<apalis_core::error::BoxDynError> + Send + 'static,
+    {
+        let venue = Arc::clone(&self.venue);
+        let request = self.request.clone();
+        let entry = nuke::policy::action::add_node(dag, "verb.short/submit", move |verdict| {
+            let venue = Arc::clone(&venue);
+            let request = request.clone();
+            async move { submit(verdict, venue, request).await }
+        });
+        entry.depends_on(gate.builder())
     }
 }
 
@@ -223,33 +278,72 @@ pub trait LedgerHandle<L: Ledger>: std::fmt::Debug + Send + Sync + 'static {
 
 impl<F: Ledger, T: Ledger> Action for Transfer<F, T> {
     const KIND: &'static str = "verb.transfer";
-    type Input = TransferRequest;
+    type Input = DecisionTag;
     type Output = TransferResult;
 
-    fn lower<B: BackendExt>(&self, _dag: &DagFlow<B>) -> NodeHandle<Self::Input, Self::Output> {
-        unreachable!("Transfer::lower v0 stub - wired in #80 follow-up")
+    fn lower<B, Err>(
+        &self,
+        dag: &DagFlow<B>,
+        gate: &nuke::policy::PolicyGate<'_, B>,
+    ) -> NodeHandle<Self::Input, Self::Output>
+    where
+        B: nuke::policy::LowerBackend<Self::Input, Self::Output, Err>,
+        Err: Into<apalis_core::error::BoxDynError> + Send + 'static,
+    {
+        let from_name = self.from.name();
+        let to_name = self.to.name();
+        let amount_qty = self.amount_qty;
+        let entry = nuke::policy::action::add_node(
+            dag,
+            "verb.transfer/initiate",
+            move |verdict| async move {
+                match verdict {
+                    DecisionTag::Allow => TransferResult::Initiated {
+                        from: from_name,
+                        to: to_name,
+                        amount_qty,
+                    },
+                    DecisionTag::Deny => TransferResult::Skipped { verdict: "deny" },
+                    DecisionTag::Escalate => TransferResult::Skipped {
+                        verdict: "escalate",
+                    },
+                }
+            },
+        );
+        entry.depends_on(gate.builder())
     }
 }
 
-/// Input the Transfer verb takes: amount + a phantom (the typed
-/// ledgers sit on the `Transfer` struct itself, not in this Input).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TransferRequest {
-    pub amount_qty: nuke::domain::Notional,
-    #[serde(skip)]
-    pub _phantom: PhantomData<()>,
-}
-
 /// Outcome an order-submitting verb (Buy / Sell / Short) emits at
-/// its terminal node. v0 only models "submitted"; the real
-/// submit-and-wait flow will swap this for a `Filled` / `Cancelled`
-/// / `Rejected` discriminator with the venue's typed `OrderId`.
+/// its terminal node. The real submit-and-wait flow will refine
+/// `Submitted` into `Filled` / `Cancelled` / `Rejected` with the
+/// venue's typed `OrderId`; the `Skipped` / `Failed` variants are
+/// already useful so policy denials and venue errors stay in the
+/// type instead of crashing the apalis worker.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OrderResult {
-    Submitted { request_qty: nuke::domain::Qty },
+    /// Order accepted by the venue. v0 records the `OrderId` returned
+    /// by `TradingVenue::place_trade` plus the request `qty` for the
+    /// downstream wait-for-fill node to key on.
+    Submitted {
+        id: nuke::OrderId,
+        request_qty: nuke::domain::Qty,
+    },
+    /// Policy verdict was non-`Allow`; the verb skipped the venue
+    /// call entirely. The `&'static str` is the verdict tag string
+    /// (`"deny"` / `"escalate"`).
+    Skipped { verdict: &'static str },
+    /// `TradingVenue::place_trade` returned an error.
+    Failed { error: String },
 }
 
 /// Outcome a [`Transfer`] emits.
+///
+/// `Initiated` records the source/destination ledger names and the
+/// notional moved. `Skipped` lands when the policy verdict gates the
+/// transfer out (Deny / Escalate). Real LedgerHandle transfers will
+/// add `Settled` / `Failed` variants once the trait grows a
+/// transfer method.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TransferResult {
     Initiated {
@@ -257,6 +351,27 @@ pub enum TransferResult {
         to: &'static str,
         amount_qty: nuke::domain::Notional,
     },
+    Skipped {
+        verdict: &'static str,
+    },
+}
+
+/// `IntoResponse` lets a `task_fn` closure return one of these
+/// directly. Apalis ships impls for primitives only; verb-specific
+/// outcomes need their own. Both shapes are infallible from the
+/// task's POV - failure is encoded in the variant.
+impl apalis_core::task_fn::into_response::IntoResponse for OrderResult {
+    type Output = Self;
+    fn into_response(self) -> Result<Self, apalis_core::error::BoxDynError> {
+        Ok(self)
+    }
+}
+
+impl apalis_core::task_fn::into_response::IntoResponse for TransferResult {
+    type Output = Self;
+    fn into_response(self) -> Result<Self, apalis_core::error::BoxDynError> {
+        Ok(self)
+    }
 }
 
 #[cfg(test)]
@@ -360,25 +475,26 @@ mod tests {
     }
 
     #[test]
-    fn transfer_request_round_trips_through_serde() {
-        let original = TransferRequest {
-            amount_qty: Notional::new(d(42)),
-            _phantom: PhantomData,
-        };
-        let bytes = serde_json::to_vec(&original).unwrap();
-        let parsed: TransferRequest = serde_json::from_slice(&bytes).unwrap();
-        assert_eq!(parsed, original);
-    }
-
-    #[test]
-    fn order_result_submitted_carries_request_qty() {
+    fn order_result_submitted_carries_request_qty_and_id() {
         let result = OrderResult::Submitted {
+            id: nuke::OrderId::new("VENUE-1"),
             request_qty: Qty::new(d(7)),
         };
         match result {
-            OrderResult::Submitted { request_qty } => {
+            OrderResult::Submitted { request_qty, id } => {
                 assert_eq!(request_qty, Qty::new(d(7)));
+                assert_eq!(id, nuke::OrderId::new("VENUE-1"));
             }
+            other => panic!("expected Submitted, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn order_result_skipped_carries_verdict_tag() {
+        let result = OrderResult::Skipped { verdict: "deny" };
+        match result {
+            OrderResult::Skipped { verdict } => assert_eq!(verdict, "deny"),
+            other => panic!("expected Skipped, got {other:?}"),
         }
     }
 
@@ -394,6 +510,7 @@ mod tests {
                 assert_eq!(from, "drift-v2");
                 assert_eq!(to, "hyperliquid");
             }
+            other => panic!("expected Initiated, got {other:?}"),
         }
     }
 }
