@@ -4,6 +4,7 @@
 //! Each backend is independent and can be enabled/extended without
 //! touching the others. New backends slot in here as separate modules.
 
+pub mod dag;
 pub mod json_schema;
 pub mod markdown;
 pub mod mermaid;
