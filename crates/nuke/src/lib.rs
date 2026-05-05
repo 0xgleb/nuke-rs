@@ -33,27 +33,35 @@ pub mod job;
 pub mod policy;
 pub mod tracing;
 
-mod dep;
 mod ext;
 mod feed;
 mod ledger;
-mod macros;
-mod one_of;
 mod reactor;
+mod review;
 mod subject;
+mod subscribe;
 mod venue;
 
 pub use apalis::{PipelineError, pump_through_apalis};
-pub use dep::{Cons, DepList, Dependent, HasDep, Never, Nil, Subscribe, Transport, Wire};
+// The type-level dep-list machinery is owned by the `event-sorcery`
+// crate so the same idiom (Cons / Nil / Never / OneOf / Fold /
+// Dependent / DepList / HasDep + the deps! macro) covers both
+// external streams (a `Subject`) and internal aggregates (an
+// `EventSourced`). Re-export it here so `nuke::*` is the only path
+// adopters need to import.
 pub use error::{Error, Result};
+pub use event_sorcery::{
+    Cons, Dep, DepList, Dependent, Fold, HasDep, Never, Nil, OneOf, deps, register_deps,
+};
 pub use ext::{ExtQuery, ExtStream, Polling};
 pub use feed::{Feed, FeedStream};
 pub use job::{Job, Label, work};
 pub use ledger::Ledger;
 pub use nuke_derive::Domain;
-pub use one_of::{Fold, OneOf};
 pub use reactor::Reactor;
+pub use review::{Approved, Processor, Refused, Validator, validate};
 pub use subject::Subject;
+pub use subscribe::{Subscribe, Transport, Wire};
 pub use venue::{TradingVenue, Venue};
 
 /// Re-exports used by macro expansions. Not part of the supported API.
@@ -71,10 +79,8 @@ pub mod reexports {
 /// `secretspec`). Reach for `nuke::Error` / `nuke::Result` explicitly
 /// when needed.
 pub mod prelude {
-    pub use crate::dep::{Cons, DepList, Dependent, HasDep, Never, Nil};
-    pub use crate::deps;
-    pub use crate::one_of::{Fold, OneOf};
     pub use crate::reactor::Reactor;
     pub use crate::subject::Subject;
     pub use async_trait::async_trait;
+    pub use event_sorcery::{Cons, DepList, Dependent, Fold, HasDep, Never, Nil, OneOf, deps};
 }

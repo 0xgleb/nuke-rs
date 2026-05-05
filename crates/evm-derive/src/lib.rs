@@ -74,10 +74,12 @@ fn expand(input: TokenStream2) -> syn::Result<TokenStream2> {
             fn deref(&self) -> &Self::Target { &self.0 }
         }
 
-        impl ::nuke::Subject for #name {
+        impl ::nuke::Dep for #name {
             type Id = #id_ident;
             type Event = #event_path;
+        }
 
+        impl ::nuke::Subject for #name {
             const NAME: &'static str = #name_str;
             const SCHEMA_VERSION: u64 = 1;
         }
