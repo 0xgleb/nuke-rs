@@ -33,16 +33,29 @@ pub mod job;
 pub mod policy;
 pub mod tracing;
 
+mod auditor;
 mod ext;
 mod feed;
+mod identifier;
 mod ledger;
+mod lifecycle;
 mod reactor;
 mod review;
+mod stream_ext;
 mod subject;
 mod subscribe;
+mod tx;
 mod venue;
 
 pub use apalis::{PipelineError, pump_through_apalis};
+pub use auditor::{AuditTick, Auditor, DropAuditor};
+pub use identifier::Identifier;
+pub use lifecycle::{
+    DefaultDisconnect, DefaultShutdown, DefaultTradingDisabled, DisconnectAction, OnDisconnect,
+    OnShutdown, OnTradingDisabled,
+};
+pub use stream_ext::{ForwardCloneBy, StreamExt as PolicyStreamExt, WithIndex, WithTimestamp};
+pub use tx::{DropTx, Tx};
 // The type-level dep-list machinery is owned by the `event-sorcery`
 // crate so the same idiom (Cons / Nil / Never / OneOf / Fold /
 // Dependent / DepList / HasDep + the deps! macro) covers both
