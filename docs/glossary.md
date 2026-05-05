@@ -148,6 +148,36 @@ mermaid flowchart, JSON Schema, SMT-LIB export, SQL `WHERE` compiler, proptest
 scaffolding, CBOR wire format with schema hash, semantic diff, telemetry
 counters, TLA+ predicate export, plus the apalis_workflow `DagFlow` compiler.
 
+### PolicyCtx / DecisionTag
+
+`PolicyCtx` is a serializable snapshot of the field values a rule will read at
+evaluation time - the bridge between an adopter's typed `Context` impl (whose
+shape isn't fixed) and apalis tasks (whose inputs must round-trip through
+serde). Built via `PolicyCtx::builder()` or
+`PolicyCtx::builder().snapshot_fields(&ctx, &fields)`; lives in
+`nuke::policy::ctx`.
+
+`DecisionTag` is the wire-friendly verdict discriminant
+(`Allow | Deny |
+Escalate`). The runtime `Decision` carries `Reason` +
+`Bindings` (rich, not-yet-serializable); `DecisionTag` is what the policy DAG's
+verdict task emits so cross-task gating can route on the verdict. Lives in
+`nuke::policy::decision`.
+
+### Policy -> DagFlow walker
+
+In `nuke::policy::backends::dag`. Walks a `RuleNode<A>` and emits:
+
+- one apalis predicate task per `RejectIf` / `EscalateIf` / `Given` condition
+  (`PolicyCtx -> bool`);
+- one verdict task per compiled rule (`PolicyCtx -> DecisionTag`) running the
+  full evaluator;
+- one action sub-DAG per `Do` leaf via `Action::lower`.
+
+Per-rule combinator decomposition (`All` / `Any` / `Bind` / `Given` gating as
+their own nodes) and the Allow-route from verdict to action entries are the next
+iterations.
+
 ## Trade / venue layer
 
 ### Ledger
