@@ -67,7 +67,7 @@ pub mod reexports {
 
 /// Common imports for users of the framework.
 ///
-/// Intentionally does **not** export `Error`/`Result` — using the
+/// Intentionally does **not** export `Error`/`Result` - using the
 /// prelude would shadow `std::result::Result`, breaking call sites
 /// that mix in other error types (e.g. macro-generated code from
 /// `secretspec`). Reach for `nuke::Error` / `nuke::Result` explicitly

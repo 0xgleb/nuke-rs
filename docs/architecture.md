@@ -60,22 +60,22 @@ flowchart TD
     class venue ext
 ```
 
-### Layer 1 — Sources
+### Layer 1 - Sources
 
 A `Source<E>` produces a stream of typed events `E`. Two adapter families ship
 with the framework:
 
-- **WebSocket Source** — handles ws transport, reconnect, framing. The transport
+- **WebSocket Source** - handles ws transport, reconnect, framing. The transport
   is generic; per-protocol decoders (e.g. JSON-RPC `eth_subscribe`) live in
   adapter crates that consume the framework.
-- **Polling Source** — periodically calls a typed fetcher and emits the diffs /
+- **Polling Source** - periodically calls a typed fetcher and emits the diffs /
   current state. Suitable for REST-only feeds.
 
 Sources are **transport adapters**, not venue adapters. There is no "EVM source"
-in the framework — there's a JSON-RPC ws transport (in the EVM adapter crate)
+in the framework - there's a JSON-RPC ws transport (in the EVM adapter crate)
 that produces a typed `Source<EthLog>`.
 
-### Layer 2 — Reactor + cqrs/es
+### Layer 2 - Reactor + cqrs/es
 
 Events from sources flow into a cqrs/es event store (`event-sorcery`). Reactors
 consume events (both directly streamed and replayed from the store) and
@@ -86,10 +86,10 @@ The reactor itself does no I/O. Its job is:
 1. Fold events into typed decisions.
 2. Hand those decisions off as job specs to apalis.
 
-That separation is what makes durability free — jobs survive restarts, retry on
+That separation is what makes durability free - jobs survive restarts, retry on
 transient failures, and report status back through apalis's lifecycle.
 
-### Layer 3 — Apalis Job DAG
+### Layer 3 - Apalis Job DAG
 
 Every external-service interaction is a `Job<Ctx>`:
 
@@ -105,10 +105,10 @@ where Ctx: Send + Sync + 'static
 
 Apalis stores the job (CBOR / SQL / Redis depending on backend), hands it to a
 worker, and applies an exponential retry policy via `backon`. Multi-step
-workflows compose via `apalis_workflow::DagFlow` — the framework wires this for
+workflows compose via `apalis_workflow::DagFlow` - the framework wires this for
 you when a policy compiles.
 
-## The eDSL → DAG compilation path
+## The eDSL -> DAG compilation path
 
 This is the framework's distinctive contribution. A `policy!` block:
 
@@ -130,7 +130,7 @@ policy! {
 }
 ```
 
-…compiles into a DAG where:
+...compiles into a DAG where:
 
 | AST node                        | DAG element                                      |
 | ------------------------------- | ------------------------------------------------ |
@@ -143,7 +143,7 @@ policy! {
 | `execute SomeJob { ... }`       | apalis Job node                                  |
 
 The compiled DAG is ready to feed `WorkerBuilder::build`. Backends that walk the
-same AST (markdown, mermaid, SMT, SQL, ...) see the same structure — each is a
+same AST (markdown, mermaid, SMT, SQL, ...) see the same structure - each is a
 fold over `RuleNode`.
 
 ## Hard invariants
@@ -156,13 +156,13 @@ Captured in [`CLAUDE.md`](../CLAUDE.md). The big ones:
 - No venue specifics (`alloy`, exchange clients, etc.) in framework crates.
   EVM/SVM/CEX live in adapter crates (e.g. `crates/evm/`) and `examples/*` only.
 - External-service side-effects only inside `Job<Ctx>` impls.
-- Apalis is internal — the public API stays in nuke vocab.
+- Apalis is internal - the public API stays in nuke vocab.
 
 ## Where this design comes from
 
 The user named the project around the metaphor: a **nuclear reactor** that
 reacts to events and triggers chain reactions (jobs, downstream reactions). The
-reactor metaphor is load-bearing — each piece of the architecture maps onto it:
+reactor metaphor is load-bearing - each piece of the architecture maps onto it:
 
 - **Source** = the reactor's neutron flux (incoming particles).
 - **Reactor** = the core (deciding what reactions fire).

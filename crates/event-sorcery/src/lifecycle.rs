@@ -12,7 +12,7 @@ use crate::event_sourced::EventSourced;
 
 /// Lifecycle wrapper around a user's [`EventSourced`] entity.
 ///
-/// State machine: `Uninitialized → Live(E) → Failed(LifecycleError<E>)`.
+/// State machine: `Uninitialized -> Live(E) -> Failed(LifecycleError<E>)`.
 /// The blanket `Aggregate` impl routes commands and events through
 /// the user's `originate` / `evolve` / `initialize` / `transition`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -21,12 +21,12 @@ use crate::event_sourced::EventSourced;
     deserialize = "E: serde::de::DeserializeOwned"
 ))]
 pub enum Lifecycle<E: EventSourced> {
-    /// No events seen yet — only `originate`-able events are valid.
+    /// No events seen yet - only `originate`-able events are valid.
     #[default]
     Uninitialized,
     /// Live state.
     Live(E),
-    /// Stuck state — a previous step failed and the entity can't
+    /// Stuck state - a previous step failed and the entity can't
     /// process further commands until reset.
     Failed(LifecycleError<E>),
 }
@@ -57,7 +57,7 @@ pub enum LifecycleError<E: EventSourced> {
     /// genesis event. Indicates a bug or replay over a stale schema.
     #[error("event cannot originate aggregate")]
     EventCantOriginate,
-    /// `evolve` returned `None` — the event doesn't apply to the
+    /// `evolve` returned `None` - the event doesn't apply to the
     /// current state (likely a stale event log).
     #[error("event does not apply to current state")]
     UnexpectedEvent,
@@ -67,7 +67,7 @@ pub enum LifecycleError<E: EventSourced> {
     /// User code returned an error from `initialize` or `transition`.
     #[error("command rejected: {0}")]
     Command(E::Error),
-    /// Lifecycle is in `Failed` state — no further commands accepted.
+    /// Lifecycle is in `Failed` state - no further commands accepted.
     #[error("aggregate is in a failed state")]
     Stuck,
 }
@@ -120,7 +120,7 @@ where
     }
 }
 
-/// Uninhabited error type — use as `EventSourced::Error` for entities
+/// Uninhabited error type -use as `EventSourced::Error` for entities
 /// whose operations never fail.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Never {}
@@ -267,7 +267,7 @@ mod tests {
 
     #[test]
     fn never_is_uninhabited() {
-        // `Never` has no constructors — this test exists to lock in
+        // `Never` has no constructors - this test exists to lock in
         // that property as intentional.
         let never: Option<Never> = None;
         assert!(never.is_none());

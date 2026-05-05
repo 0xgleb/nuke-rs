@@ -1,4 +1,4 @@
-//! [`EvmSubject`] — extends `nuke::Subject` with the EVM-specific
+//! [`EvmSubject`] - extends `nuke::Subject` with the EVM-specific
 //! methods needed to open an `eth_subscribe("logs", ...)` and decode
 //! the resulting notifications back into typed events.
 //!

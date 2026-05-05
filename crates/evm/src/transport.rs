@@ -6,7 +6,7 @@
 //! `eth_subscription` notifications are forwarded as [`RawLog`] values
 //! into a single `mpsc` channel consumed by [`pump`](crate::evm::pump).
 //!
-//! Reconnect, backoff, and heartbeat are intentionally absent in v0 —
+//! Reconnect, backoff, and heartbeat are intentionally absent in v0 -
 //! follow-up PRs will layer them on top of this transport via tower
 //! middleware.
 

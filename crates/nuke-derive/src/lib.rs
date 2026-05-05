@@ -1,13 +1,8 @@
-//! Procedural macros for the framework crate (`nuke`).
+//! Proc-macros exported by this crate.
 //!
-//! Currently:
-//! - `#[derive(Domain)]` — generates typed accessors and a `read_field`
-//!   method on a domain entity struct so the eDSL can address its
-//!   fields by name without losing static type checks.
-//!
-//! Venue-specific derives (e.g. `#[derive(EvmSubject)]`) live in
-//! adapter crates next to the venue trait they implement (see
-//! `crates/evm-derive`).
+//! - [`Domain`] - generates typed accessors and a `read_field` method
+//!   on a domain entity struct so the eDSL can address its fields by
+//!   name without losing static type checks.
 
 use proc_macro::TokenStream;
 

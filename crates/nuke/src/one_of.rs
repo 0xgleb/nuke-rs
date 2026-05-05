@@ -9,8 +9,8 @@ use std::pin::Pin;
 
 use crate::subscribed::Never;
 
-/// Discriminated union of subject events, computed from a type-level
-/// subject list. See [`SubjectList`](crate::SubjectList).
+/// Discriminated union of dep events, computed from a type-level
+/// dep list. See [`DepList`](crate::DepList).
 #[derive(Clone)]
 pub enum OneOf<Head, Tail> {
     Here(Head),
@@ -18,10 +18,10 @@ pub enum OneOf<Head, Tail> {
 }
 
 impl<Id, Event, Tail> OneOf<(Id, Event), Tail> {
-    /// Handle the head subject in the union.
+    /// Handle the head dep in the union.
     ///
     /// Returns a [`Fold`] that you continue with `.on(...)` for each
-    /// remaining subject; finish with `.exhaustive().await`.
+    /// remaining dep; finish with `.exhaustive().await`.
     pub fn on<'a, T, F, Fut>(self, handler: F) -> Fold<BoxFuture<'a, T>, Tail>
     where
         F: FnOnce(Id, Event) -> Fut,
@@ -35,10 +35,10 @@ impl<Id, Event, Tail> OneOf<(Id, Event), Tail> {
 }
 
 impl<A> OneOf<A, Never> {
-    /// Unwrap a single-subject union.
+    /// Unwrap a single-dep union.
     ///
-    /// Convenience for `Subjects = subjects![Single]` where the
-    /// computed event is `OneOf<(Id, Event), Never>`.
+    /// Convenience for `Deps = deps![Single]` where the computed
+    /// event is `OneOf<(Id, Event), Never>`.
     pub fn into_inner(self) -> A {
         match self {
             Self::Here(inner) => inner,
@@ -56,7 +56,7 @@ pub enum Fold<T, Remaining> {
 type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 impl<'a, T, Id, Event, Tail> Fold<BoxFuture<'a, T>, OneOf<(Id, Event), Tail>> {
-    /// Handle the next subject in the union.
+    /// Handle the next dep in the union.
     pub fn on<F, Fut>(self, handler: F) -> Fold<BoxFuture<'a, T>, Tail>
     where
         F: FnOnce(Id, Event) -> Fut,
@@ -73,11 +73,11 @@ impl<'a, T, Id, Event, Tail> Fold<BoxFuture<'a, T>, OneOf<(Id, Event), Tail>> {
 }
 
 impl<T> Fold<T, Never> {
-    /// Extract the result once every subject has been handled.
+    /// Extract the result once every dep has been handled.
     ///
-    /// Only available when the remaining tail is [`Never`] — i.e., when
-    /// every subject in the reactor's list has a corresponding `.on()`
-    /// handler. Forgetting one is a compile error.
+    /// Only available when the remaining tail is [`Never`] - i.e.,
+    /// when every dep in the reactor's list has a corresponding
+    /// `.on()` handler. Forgetting one is a compile error.
     pub fn exhaustive(self) -> T {
         match self {
             Self::Done(result) => result,

@@ -15,7 +15,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-# Internal crates — referenced by path so workspace members can pull
+# Internal crates - referenced by path so workspace members can pull
 # each other in without version juggling during the split.
 nuke = { path = "crates/nuke", version = "0.1.0" }
 nuke-derive = { path = "crates/nuke-derive", version = "0.1.0" }
@@ -46,7 +46,7 @@ serde_json = "1"
 # Tower-style middleware
 tower = { version = "0.5.3", default-features = false, features = ["util"] }
 
-# Job execution — apalis 1.x. Internal to the framework; never exposed
+# Job execution - apalis 1.x. Internal to the framework; never exposed
 # in the public API per CLAUDE.md.
 apalis = "=1.0.0-rc.7"
 apalis-core = "=1.0.0-rc.7"
@@ -59,7 +59,7 @@ backon = "1.6"
 alloy-primitives = { version = "1.5", features = ["serde"] }
 alloy-sol-types = "1.5"
 
-# Domain primitives — Decimal everywhere, never f64 (see CLAUDE.md).
+# Domain primitives - Decimal everywhere, never f64 (see CLAUDE.md).
 rust_decimal = { version = "1.41", features = ["serde"] }
 
 # Rule registry: distributed-slice registration.
@@ -69,7 +69,7 @@ linkme = "0.3.36"
 ciborium = "0.2.2"
 sha2 = "0.11.0"
 
-# Persistence layer — cqrs-es event-sourced bridge.
+# Persistence layer - cqrs-es event-sourced bridge.
 cqrs-es = "0.4.12"
 
 # Observability

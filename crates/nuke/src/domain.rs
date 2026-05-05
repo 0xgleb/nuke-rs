@@ -1,20 +1,16 @@
-//! Domain primitives for trading and asset transfer.
+//! Domain primitives.
 //!
-//! Newtypes per financial primitive over [`rust_decimal::Decimal`]. **No
-//! `f64` anywhere** in domain code — floats lose precision in ways that
-//! are catastrophic at financial scale, and the eDSL backends (SMT
-//! solvers especially) assume exact arithmetic.
+//! Newtypes over [`rust_decimal::Decimal`] with typed conversions
+//! (`Qty * Px = Notional`) so callers can't multiply two prices or
+//! divide a quantity by a notional and get a nonsense type. No `f64`
+//! anywhere - floats lose precision in ways that are catastrophic at
+//! financial scale.
 //!
-//! - [`Symbol`] — opaque instrument identifier.
-//! - [`Side`] — discriminated `Buy | Sell` (boolean blindness avoided).
-//! - [`Px`] — a price.
-//! - [`Qty`] — a quantity (e.g. a swap size, an inventory level).
-//! - [`Notional`] — a money amount.
-//!
-//! Conversions across primitives are *typed*: `Qty * Px = Notional` is
-//! the only multiplication you can write between those two; the result
-//! carries the right unit so call sites can't accidentally treat a price
-//! as a quantity or vice versa.
+//! - [`Symbol`] - opaque instrument identifier.
+//! - [`Side`] - discriminated `Buy | Sell` (boolean blindness avoided).
+//! - [`Px`] - a price.
+//! - [`Qty`] - a quantity (a count of base-currency units).
+//! - [`Notional`] - a money amount.
 
 use std::fmt;
 use std::ops::{Add, Sub};
@@ -22,11 +18,8 @@ use std::ops::{Add, Sub};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-/// Opaque instrument identifier — e.g. `"BTC-USD"`, `"WETH/USDC"`. Wrap
-/// once at the boundary; callers never touch the raw string.
-///
-/// String-backed in v0; switch to interned `&'static str` once the rule
-/// registry needs it.
+/// Opaque instrument identifier - e.g. `"BTC-USD"`, `"WETH/USDC"`.
+/// Wrap once at the boundary; callers never touch the raw string.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Symbol(String);
 
@@ -46,8 +39,8 @@ impl fmt::Display for Symbol {
     }
 }
 
-/// Trade side. Discriminated union, never `bool` — boolean blindness at
-/// call sites obscures direction.
+/// Trade side. Discriminated union, never `bool` - boolean blindness
+/// at call sites obscures direction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Side {
     Buy,
@@ -72,8 +65,7 @@ impl fmt::Display for Side {
     }
 }
 
-/// A price expressed as a quote-currency amount per unit base. Always
-/// `Decimal` — never `f64`.
+/// A price expressed as a quote-currency amount per unit base.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Px(Decimal);
 
@@ -97,8 +89,8 @@ impl fmt::Display for Px {
     }
 }
 
-/// A quantity — a count of base-currency units (e.g. shares, tokens, lots).
-/// Always `Decimal`.
+/// A quantity - a count of base-currency units (e.g. shares, tokens,
+/// lots).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Qty(Decimal);
 
@@ -136,8 +128,8 @@ impl Sub for Qty {
     }
 }
 
-/// A money amount — quote-currency denominated value (e.g. `$1234.56` of
-/// USDC). Always `Decimal`.
+/// A money amount - quote-currency denominated value (e.g. `$1234.56`
+/// of USDC).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Notional(Decimal);
 
