@@ -34,6 +34,7 @@ pub mod policy;
 pub mod tracing;
 
 mod dep;
+mod ext;
 mod feed;
 mod ledger;
 mod macros;
@@ -45,6 +46,7 @@ mod venue;
 pub use apalis::{PipelineError, pump_through_apalis};
 pub use dep::{Cons, DepList, Dependent, HasDep, Never, Nil, Subscribe, Transport, Wire};
 pub use error::{Error, Result};
+pub use ext::{ExtQuery, ExtStream, Polling};
 pub use feed::{Feed, FeedStream};
 pub use job::{Job, Label, work};
 pub use ledger::Ledger;
