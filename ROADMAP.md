@@ -1,228 +1,314 @@
 # nuke-rs Roadmap
 
-What needs to happen to get nuke-rs from "first vertical slice that runs" to
-"trading framework worth using." Epics are ordered by priority; the first
+What needs to happen to make nuke-rs a general-purpose event-driven
+framework worth using. Epics are ordered by priority — the first
 epic is always the next thing to implement.
+
+See [CLAUDE.md](CLAUDE.md) for the architectural invariants this
+roadmap is in service of, and [docs/architecture.md](docs/architecture.md)
+for the long-form design.
 
 ## Dependency graph
 
 ```mermaid
 graph TD
-    Bootstrap["Completed: Bootstrap (websocket framework, apalis runtime, arb-bot e2e)"]:::done
+    Bootstrap["Completed: bootstrap (eDSL, backends, persist, arb e2e)"]:::done
 
-    DomainPrimitives["Domain primitives<br/>Symbol/Qty/Px/Notional/Side<br/>over rust_decimal::Decimal"]
-    EdslFoundation["eDSL foundation<br/>Expr&lt;T&gt; + RuleNode + capabilities<br/>+ Decision/Reason + macros"]
-    EdslBackends["eDSL backends<br/>(11 parallelizable folds)"]
+    StripVenue["Strip EVM/venue specifics<br/>out of framework crates"]
+    WorkspaceSplit["Workspace split<br/>nuke-core / -domain / -policy / -job / -persist / -derive"]
 
-    Persistence["cqrs-es persistence<br/>(event-sorcery-style adapter)"]
-    FrameworkDeepening["Framework deepening<br/>reconnect, backpressure, multi-chain"]
+    AbstractTraits["Abstract framework traits<br/>Source&lt;E&gt; (ws+poll) +<br/>TradingVenue + Job&lt;Ctx&gt;"]
+    ReactorRefactor["Refactor Reactor<br/>enqueue Job DAG, not direct calls"]
+    PolicyToDag["Compile policy! → apalis DAG<br/>(the killer feature)"]
 
-    Bootstrap --> DomainPrimitives
-    DomainPrimitives --> EdslFoundation
-    EdslFoundation --> EdslBackends
-    Bootstrap --> Persistence
+    EvmAdapter["EVM adapter<br/>(in adapters/evm/, NOT framework)"]
+    ArbBotV2["Arb example with profit check<br/>+ Job-based execution"]
+    SecondExample["Second example<br/>polling source + non-DEX domain"]
+
+    FrameworkDeepening["Framework deepening<br/>reconnect, backpressure, schema reconciliation"]
+
+    Bootstrap --> StripVenue
+    StripVenue --> WorkspaceSplit
+    WorkspaceSplit --> AbstractTraits
+    AbstractTraits --> ReactorRefactor
+    ReactorRefactor --> PolicyToDag
+    AbstractTraits --> EvmAdapter
+    PolicyToDag --> ArbBotV2
+    EvmAdapter --> ArbBotV2
+    AbstractTraits --> SecondExample
     Bootstrap --> FrameworkDeepening
 
     classDef done fill:#1f4f1f,stroke:#0f0,color:#cfc
 ```
 
 Independent work streams (each suitable for its own worktree):
-1. **eDSL stream**: `DomainPrimitives → eDSLFoundation → eDSLBackends` (sequential within, parallel backends after foundation lands).
-2. **Persistence stream**: `cqrs-es adapter` (independent of eDSL, can start now).
-3. **Framework stream**: reconnect/backpressure/multi-chain (independent of both).
 
-## Domain primitives
+1. **Architecture stream**: `StripVenue → WorkspaceSplit → AbstractTraits → ReactorRefactor → PolicyToDag` (sequential).
+2. **Adapter stream**: `EvmAdapter` (kicks off after `AbstractTraits`).
+3. **Examples stream**: `ArbBotV2 → SecondExample` (after the adapter + policy compiler).
+4. **Hardening stream**: `FrameworkDeepening` (independent of the others).
 
-Foundation for the eDSL and every backend that touches money or quantities.
-Without these, the rest of the financial code drifts back to `f64` or stringly
-typed amounts.
+## Strip EVM/venue specifics out of the framework crates
 
-- [ ] Crate or module `nuke::domain` with newtypes:
-  - [ ] `Symbol(SmolStr)` (or interned)
-  - [ ] `Qty(Decimal)`
-  - [ ] `Px(Decimal)`
-  - [ ] `Notional(Decimal)`
-  - [ ] `Side` (discriminated, `Buy | Sell`)
-- [ ] `From`/`TryFrom` between primitives where the conversion is safe
-  (e.g. `Qty * Px = Notional` is *not* free; build a typed multiplication
-  helper that returns `Notional`).
-- [ ] No `f64` anywhere in domain code (CI lint).
-- [ ] Conversions from EVM types (`U256`, `U112`) into the appropriate
-  domain primitive at the decode boundary — never let raw integers leak past
-  the websocket / decoder layer.
-- [ ] Audit current `examples/arb_bot/main.rs` and `tests/arb_bot_e2e.rs` to
-  use the new primitives instead of bare `Decimal`.
+The framework currently has `EvmWsSource`, `nuke::evm`, alloy
+dependencies, JSON-RPC framing, and a `#[derive(EvmSubject)]` macro
+all sitting in framework code. Per
+[CLAUDE.md](CLAUDE.md), none of that belongs there.
 
-## eDSL foundation
+- [ ] Inventory every reference to `evm`, `alloy`, `eth_subscribe`,
+      `EvmWsSource`, `EvmSubject`, etc. in framework crates. Move
+      each to either `examples/<name>/` (if it's example-specific)
+      or `adapters/evm/` (if it's a reusable adapter).
+- [ ] Delete `nuke::evm` from framework code once everything is
+      moved.
+- [ ] Move `#[derive(EvmSubject)]` out of `nuke-derive`. The EVM
+      derive belongs in an EVM-adapter proc-macro crate, not in the
+      framework's derive crate.
+- [ ] `Subject` becomes a fully abstract trait — keep it in the
+      framework (it's the type-level subscription primitive) but
+      drop any EVM-flavored docstrings.
 
-The typed AST + capability machinery + macros that everything else folds
-over. Habito-style: stakeholders read it, type system rejects insufficient
-contexts, no closures anywhere in the rule language.
+## Workspace split
 
-- [ ] `nuke::policy::ast` — the reified AST.
-  - [ ] `Expr<T>` polymorphic typed expression node (phantom `T` for
-    compile-time value-type checks).
-  - [ ] Inner `Expr` enum uniformly enumerated (so backends walk without
-    generics): `Lit`, `Field`, `BinOp`, `Cmp`, `Call`, `Bind`, `Cond`, etc.
-  - [ ] `RuleNode` for control flow: `Given`, `RejectIf`, `EscalateIf`,
-    `All`, `Any`, `Bind`.
-  - [ ] Initial encoding (NOT tagless-final).
-- [ ] Capability tracking.
-  - [ ] Capability traits per readable thing: `HasOrder`, `HasInventory`,
-    `HasMarketData`, `HasRiskLimits` (extend as features need).
-  - [ ] `Rule<Caps>` carrying phantom type-level capability list (reuse
-    `Cons`/`Nil` from `nuke::subscribed`).
-  - [ ] `Provides<Caps>` trait proving a context satisfies the list.
-  - [ ] HList-shaped `ProvidesAll` (or sorted normalization) so capability
-    tuples are order-independent.
-  - [ ] Wiring rule against insufficient context = compile error (proven
-    via trybuild test).
-- [ ] `Decision` algebra:
-  - [ ] `Allow | Deny { rule, reason, bindings } | Escalate { rule, to,
-    reason }`.
-  - [ ] `bindings` carries the actual values that produced the verdict
-    (captured during evaluation), making rejections self-explanatory and
-    reproducible.
-- [ ] `Reason` is a format-string AST with named slots, NOT `String`.
-  Preserves structure for every backend.
-- [ ] `nuke-derive::Domain` proc-macro on each domain struct.
-  - [ ] Generates typed field accessors (`order::qty()`, `order::side()`).
-  - [ ] Registers metadata (display names, units, types) into a startup
-    global registry every backend reads from. Likely `linkme`-distributed.
-- [ ] `policy!` macro — writing surface that desugars to AST constructors.
-  - [ ] Syntactically rejects free-form Rust blocks.
-  - [ ] Emits zero closures at the leaves — every leaf is a typed AST node.
-- [ ] Rule ID interning + uniqueness.
-  - [ ] Interned `&'static str` IDs registered via `linkme`-distributed
-    slice.
-  - [ ] CI script enforces uniqueness AND a corresponding markdown entry
-    per ID.
+Convert the single `nuke` crate into a workspace. Layout:
 
-## eDSL backends
+| Crate | Role | Venue specifics? |
+| --- | --- | --- |
+| `nuke-core` | `Source<E>`, `TradingVenue<...>`, run loop, type-level subject machinery | No |
+| `nuke-domain` | `Symbol`, `Side`, `Px`, `Qty`, `Notional` over `Decimal` | No |
+| `nuke-policy` | eDSL: `Expr<T>`, `RuleNode`, backends, policy → DAG compiler | No |
+| `nuke-job` | `Job<Ctx>` trait + apalis adapter + `work::<Ctx, J>` handler | No |
+| `nuke-persist` | cqrs-es bridge | No |
+| `nuke-derive` | Framework-only proc-macros (`#[derive(Domain)]`) | No |
+| `adapters/evm/` | EVM ws Source + signed-tx TradingVenue + `#[derive(EvmSubject)]` | Yes |
+| `examples/dex_arb/` | Cross-DEX arbitrage example | Yes |
+| `examples/<second>/` | Polling-Source + non-DEX example | Yes |
 
-Each backend is a fold over `RuleNode` (sometimes also `Expr`). After the
-foundation lands they're parallelizable; the build order below is *priority*
-(value to the project), not strict dependency order.
+- [ ] Set up the workspace `Cargo.toml`.
+- [ ] Move modules to their target crates one at a time, keeping
+      `cargo test --workspace` green at each step.
+- [ ] Per-crate `README.md` files documenting role + composition.
+- [ ] Module-level `//!` docs explaining each module's place in the
+      architecture (per [CLAUDE.md](CLAUDE.md) workflow rules).
 
-```mermaid
-graph LR
-    Foundation[eDSL foundation] --> RuntimeEval[1 Runtime evaluator]
-    Foundation --> Markdown[2 Markdown digest]
-    Foundation --> JsonSchema[3 JSON Schema]
-    Foundation --> Mermaid[4 Mermaid tree]
-    Foundation --> SMT[5 SMT export]
-    Foundation --> Proptest[6 Proptest scaffolding]
-    Foundation --> SQL[7 SQL backtest]
-    Foundation --> CBOR[8 CBOR wire format]
-    Foundation --> SemanticDiff[9 Semantic diff]
-    Foundation --> Telemetry[10 Coverage / drift]
-    Foundation --> TLA[11 TLA+ / Alloy]
+## Abstract framework traits
 
-    classDef high fill:#553f00,stroke:#fc0,color:#fff
-    class RuntimeEval,Markdown,SMT high
-```
+Replace concrete EVM types with the trait abstractions the framework
+should have had from day one.
 
-- [ ] **1. Runtime evaluator** — macro-generated, monomorphic per rule,
-  branch-predictable; populates `bindings` on the deny path. Highest
-  priority — without this nothing actually runs.
-- [ ] **2. Markdown digest** — what compliance signs off on; field paths
-  render via the name registry. Diffs become free changelogs.
-- [ ] **3. JSON Schema of required context** — minimal contract for any
-  system feeding the rule.
-- [ ] **4. Mermaid decision tree** — visual review; catches dead branches.
-- [ ] **5. SMT export (Z3/CVC5)** — proves totality and non-subsumption (no
-  rule fully shadowed by another) in CI.
-- [ ] **6. Proptest scaffolding** — strategies derived from branch
-  structure; coverage is structural, not line-based.
-- [ ] **7. SQL backtest** — compile predicates to a `WHERE` clause; run
-  against historical flow to measure hit-rate and trader impact before
-  deploying.
-- [ ] **8. Versioned wire format (CBOR + schema hash)** — post-trade audit
-  references the exact rule that ran. Enables hot-reload.
-- [ ] **9. Semantic diff** over `RuleNode` — narrowed / widened / unrelated;
-  far better than textual git diff for review.
-- [ ] **10. Coverage / drift telemetry** — log which leaves fire in
-  production; surface dead rules and regime changes.
-- [ ] **11. TLA+ / Alloy export** — when the policy is one component of a
-  larger order-lifecycle state machine.
+- [ ] `Source<E>` trait — produces a stream of typed events. Two
+      adapter families:
+  - [ ] **WebSocket adapter** — generic ws transport, reconnect,
+        framing. Per-protocol decoders live in adapter crates.
+  - [ ] **Polling adapter** — periodic typed fetcher; emits diffs /
+        current state. Suitable for REST-only feeds.
+- [ ] `TradingVenue<...>` trait (parameterized over the venue's
+      order/fill/quote types) — outbound side. EVM (signed tx →
+      RPC), CEX REST, paper-trading sandbox are *implementations*.
+- [ ] `Job<Ctx>` trait modeled on
+      [`~/code/st0x/st0x.liquidity/src/conductor/job.rs`](CLAUDE.md):
+      `Serialize + DeserializeOwned + Send + 'static` with `label()`
+      and `async fn perform(&self, ctx: &Ctx)`. Generic `work::<Ctx,
+      J>` apalis handler with `backon` retries.
+- [ ] Replace `EventSourced::Services` with the Ctx-injected Job
+      pattern.
+- [ ] Borrow `Validator` and `Processor<Event>` traits from
+      `barter-rs` (small, generic, useful).
+- [ ] Borrow typed approve/refuse wrappers (`Approved<T>`,
+      `Refused<T, Reason>`) for policy results.
 
-## Persistence (cqrs-es, event-sorcery-style adapter)
+## Refactor Reactor: enqueue Jobs, not direct calls
 
-Long-lived state is event-sourced via cqrs-es with a custom adapter modeled
-on `~/code/st0x/st0x.liquidity/crates/event-sorcery/`. Avoids cqrs-es's
-sharp edges (infallible `apply`, stringly aggregate IDs, no schema
-versioning, flat command handling).
+Currently `Reactor::react(event)` runs user code synchronously. Per
+the new architecture, the reactor enqueues apalis Jobs that form a
+DAG workflow. External-service side-effects always happen inside
+Jobs, never in the reactor body.
 
-- [ ] `nuke::persist::EventSourced` trait with rich associated types
-  (`Id`, `Event`, `Command`, `Error`, `Services`, `Materialized`) and
-  consts (`AGGREGATE_TYPE`, `PROJECTION`, `SCHEMA_VERSION`).
-- [ ] Naming asymmetry: `originate`/`evolve` (event-side) vs
-  `initialize`/`transition` (command-side).
-- [ ] Strongly-typed aggregate IDs (newtype around the natural identifier
-  for each aggregate type).
-- [ ] Internal `Lifecycle`-equivalent providing the blanket
-  `cqrs_es::Aggregate` impl; users only see nuke's trait.
-- [ ] Names deliberately distinct from cqrs-es so it's obvious which crate
-  owns a symbol.
-- [ ] Schema reconciler — startup-time check that bumps reconcile stale
-  snapshots/views automatically.
-- [ ] Reuse `Cons`/`Nil`/`OneOf` machinery for multi-aggregate reactors.
-- [ ] When this lands, switch the apalis adapter from the in-memory
-  `dequeue` backend to a persistent backend (`apalis-sql` or similar) so
-  reactor jobs survive restarts. Then enable the `apalis-workflow` chained
-  reaction path.
+- [ ] Replace `Reactor::react(event) -> Result<(), Error>` with a
+      shape that emits a Job DAG.
+- [ ] Wire reactor outputs through `apalis_workflow::DagFlow`.
+- [ ] Update the in-memory `dequeue` runtime to handle DAG nodes.
+- [ ] Document the failure modes (job rejected, retry exhausted,
+      DAG step's predicate denied) and how they surface.
+
+## Compile policy! eDSL → apalis DAG
+
+The framework's distinctive contribution. Walk a `RuleNode` and emit
+an `apalis_workflow::DagFlow` ready for `WorkerBuilder::build`:
+
+| AST node | DAG element |
+| --- | --- |
+| `Given { conditions, then }` | predicate-gate node + edge to `then` |
+| `RejectIf { condition, ... }` | predicate node + terminal Deny edge |
+| `EscalateIf { condition, ... }` | predicate node + terminal Escalate edge |
+| `All [a, b, c]` | sequential edges; first non-Allow short-circuits |
+| `Any [a, b, c]` | sequential edges; first non-Allow short-circuits |
+| `Bind { name, expr, then }` | computed-step node, value flows downstream |
+| `execute SomeJob { ... }` | apalis Job node |
+
+- [ ] Extend the `policy!` macro family with an `execute` form that
+      embeds a `Job<Ctx>` impl as a leaf.
+- [ ] Implement the AST → DAG compilation as a 12th backend in
+      `nuke-policy::backends`.
+- [ ] Round-trip test: a policy compiles to a DAG, the DAG runs
+      through apalis, the resulting verdicts match what the runtime
+      evaluator backend would have produced.
+- [ ] Switch the persistent backend story (per the persistence
+      epic) so the compiled DAG can use `apalis-sql` once that's in.
+
+## EVM adapter (in adapters/evm/, NOT framework)
+
+A reusable adapter crate that consumes the framework traits and
+provides EVM-specific implementations for examples that want them.
+
+- [ ] `adapters/evm/` workspace member.
+- [ ] EVM ws `Source<EthLog>` (the current `EvmWsSource` lives here).
+- [ ] EVM `TradingVenue` impl that submits signed transactions via
+      RPC.
+- [ ] `#[derive(EvmSubject)]` proc-macro lives here.
+- [ ] Examples that need EVM depend on this adapter, never on alloy
+      directly.
+
+## Arb example v2 — profit check + Job-based execution
+
+The current arb example calls handlers directly and lacks a
+profitability gate. v2:
+
+- [ ] Use the EVM adapter from `adapters/evm/` instead of in-tree
+      `nuke::evm`.
+- [ ] Add a `policy!` block that gates trade submission on
+      profitability (`reject "arb.unprofitable" when expected_profit
+      < min_threshold ...`).
+- [ ] Trade submission becomes a `Job<Ctx>` impl (e.g.
+      `SubmitArbTrade { buy_pool, sell_pool, size }`) executed via
+      apalis with retries — never inline in the reactor.
+- [ ] The e2e test asserts the policy correctly rejects
+      below-threshold opportunities.
+
+## Second example — polling source + non-DEX domain
+
+Exercises a transport other than ws (polling) and proves the
+framework is genuinely general-purpose by using a non-blockchain
+domain. Candidates:
+
+- [ ] A scheduled rebalancer that polls a price feed via REST.
+- [ ] A non-finance reactor (watch-this-API-for-a-condition agent).
+- [ ] An IoT-ish sensor → alert pipeline.
+
+Pick when implementing; document why the choice covers a different
+gap from the arb example.
 
 ## Framework deepening
 
-The websocket transport is intentionally minimal in v0. As real users push
-on it, fill in:
+The transports are intentionally minimal in v0. Filled in as real
+users push on them:
 
-- [ ] Reconnect with exponential backoff (currently a single ws connection
-  with no recovery).
+- [ ] Reconnect with exponential backoff on the ws Source.
 - [ ] Heartbeat / keepalive pings.
-- [ ] Backpressure on the EvmWsSource → apalis pipe.
-- [ ] Reorg handling (slot-aware deduplication of logs that get reverted).
-- [ ] Multi-chain support (currently Ethereum mainnet only).
-- [ ] More DEX adapters (Uniswap V3, Curve, Balancer; Subject types for
-  each).
-- [ ] CEX adapters (Binance, Coinbase, Bybit) — same `Subject` shape, ws
-  decoder per venue.
-- [ ] ABI schema reconciler — refuse to start if a `Subject::SCHEMA_VERSION`
-  doesn't match what downstream consumers recorded.
+- [ ] Backpressure on the Source → apalis pipe.
+- [ ] Schema reconciler — refuse to start if a `Subject` /
+      `EventSourced` `SCHEMA_VERSION` doesn't match what downstream
+      consumers recorded.
+- [ ] Persistent apalis backend (`apalis-sql`) so jobs survive
+      restarts. Then enable the `apalis_workflow::DagFlow` chained
+      reaction path.
+
+## Documentation
+
+Documentation is part of the work, not a cleanup pass. Updated
+in the same commit as the code change per [CLAUDE.md](CLAUDE.md).
+
+- [x] Repo `CLAUDE.md` with architectural invariants.
+- [x] `docs/architecture.md` long-form architecture reference with
+      diagrams.
+- [x] README rewrite for the general-purpose framing.
+- [ ] Per-crate `README.md` files after the workspace split.
+- [ ] Module-level `//!` docs auditing pass once the abstract
+      traits land.
+- [ ] Worked-example doctest on the policy → DAG compiler.
 
 ## Not epic
 
 Smaller follow-ups not big enough to be their own epic yet:
 
-- [ ] `trybuild` compile-fail tests for the type-level invariants on
-  `OneOf`/`subjects!` (proves non-exhaustive `react` chain fails to
-  compile, and proves capability mismatch is a compile error once the eDSL
-  lands).
-- [ ] Real CI workflow for the SMT non-subsumption check (depends on eDSL
-  SMT backend).
-- [ ] `nuke::tracing::init` honors `NUKE_LOG` in addition to `RUST_LOG` for
-  per-component filtering.
+- [ ] Real CI workflow for the SMT non-subsumption check (depends
+      on eDSL SMT backend).
+- [ ] `nuke::tracing::init` honors `NUKE_LOG` in addition to
+      `RUST_LOG` for per-component filtering.
+- [ ] Add `cleanup_finished_jobs` SQL helper (mirrors the conductor
+      reference) when the persistent apalis backend lands.
 
 ## Completed: Bootstrap
 
-The websocket framework + apalis-backed runtime + DEX/DEX arb-bot example +
-e2e test against an embedded mock JSON-RPC ws server.
-
-- [x] Repo housekeeping: rename to `nuke`, drop the `rust-nix` template
-  scaffolding (`src/main.rs`, `templates/`, `ci-template-mirror`).
+- [x] Repo housekeeping (rename to `nuke`, drop template scaffolding).
 - [x] Type-level core: `Subject`, `Subscribed`, `OneOf`, `HasSubject`,
-  `subjects!` macro — mirrors event-sorcery's `Cons`/`Nil`/`OneOf`/`deps!`
-  pattern.
+      `subjects!` macro.
 - [x] `Reactor` trait + `Arc<R>` blanket.
-- [x] `EvmWsSource`: ws transport + JSON-RPC framing + `eth_subscribe`
-  management.
-- [x] `nuke-derive::EvmSubject` proc-macro derive.
-- [x] Apalis 1.x wired internally as the run loop (`PipeExt::pipe_to` →
-  `dequeue::backend` → `WorkerBuilder`). Public API never exposes apalis.
-- [x] `secretspec.toml` declares `ETH_WS_RPC_URL`; example loads via
-  `secretspec_derive::declare_secrets!`.
-- [x] DEX/DEX arb example (Uniswap V2 vs SushiSwap V2 on WETH/USDC).
-- [x] E2e test against an embedded mock JSON-RPC ws server with a
-  deterministic fixture.
-- [x] Replaced `f64` with `rust_decimal::Decimal` in arb math (no `f64` in
-  domain code).
+- [x] EVM ws transport — **to be moved to `adapters/evm/`**.
+- [x] `nuke-derive::EvmSubject` proc-macro derive — **to be moved
+      to the EVM adapter crate**.
+- [x] Apalis 1.x wired internally (`PipeExt::pipe_to` →
+      `dequeue::backend` → `WorkerBuilder`).
+- [x] `secretspec.toml` declares `ETH_WS_RPC_URL`.
+- [x] DEX/DEX arb example.
+- [x] E2e test against an embedded mock JSON-RPC ws server.
+- [x] Replaced `f64` with `rust_decimal::Decimal` in arb math.
+
+## Completed: eDSL foundation
+
+- [x] Domain primitives (`nuke::domain`): `Symbol`, `Side`, `Px`,
+      `Qty`, `Notional` over `Decimal` with typed `Qty * Px =
+      Notional`.
+- [x] eDSL typed AST: `Expr<T>` + `RuleNode` (initial encoding, no
+      closures).
+- [x] eDSL capability tracking: `Context` + `Capability` traits.
+- [x] eDSL `Decision` algebra + `Reason` format-string AST +
+      `Bindings` for evaluation capture.
+- [x] `#[derive(Domain)]` proc-macro for typed field accessors.
+- [x] `policy!` / `reject_when!` / `escalate_when!` / `all_of!` /
+      `any_of!` / `given!` / `bind_as!` / `define_rule!` macros.
+- [x] Rule registry: `register_rule!` via `linkme` distributed slice
+      + uniqueness check.
+- [x] eDSL runtime evaluator with bindings capture.
+
+## Completed: eDSL backends (10 of 11; DAG compiler still TODO)
+
+- [x] **1. Runtime evaluator** — see above.
+- [x] **2. Markdown digest**.
+- [x] **3. JSON Schema of required context**.
+- [x] **4. Mermaid decision tree**.
+- [x] **5. SMT export (Z3/CVC5 SMT-LIB).
+- [x] **6. Proptest scaffolding** (TestPlan emission).
+- [x] **7. SQL backtest** (`WHERE` clause compiler).
+- [x] **8. Versioned wire format** (CBOR + SHA-256 schema hash).
+- [x] **9. Semantic diff** (narrowed/widened/unrelated over RuleNode).
+- [x] **10. Coverage / drift telemetry**.
+- [x] **11. TLA+ predicate export**.
+- [ ] **12. Policy → apalis DAG compiler** — the killer feature.
+      Lives in the "Compile policy! eDSL → apalis DAG" epic above,
+      not here.
+
+## Completed: Persistence (cqrs-es, event-sorcery-style adapter)
+
+- [x] `nuke::persist::EventSourced` trait with rich associated types.
+- [x] Naming asymmetry: `originate`/`evolve` (event-side) vs
+      `initialize`/`transition` (command-side).
+- [x] `Lifecycle<E>` adapter providing the blanket
+      `cqrs_es::Aggregate` impl.
+- [x] `LifecycleError<E>` enum covering structural + user errors.
+- [x] `Never` uninhabited error type for infallible entities.
+- [x] **Note:** `Services` will be replaced by the `Job<Ctx>`
+      pattern under the "Abstract framework traits" epic.
+
+## Completed: trybuild compile-fail tests
+
+- [x] Two compile-fail cases proving non-exhaustive `.on(...).exhaustive()`
+      and mismatched-typed comparisons fail to compile.
+- [x] `#[ignore]`d by default (snapshots drift across rustc versions).
+
+## Completed: Documentation
+
+- [x] Repo `CLAUDE.md`.
+- [x] `docs/architecture.md` with diagrams.
+- [x] README rewrite for the general-purpose framing.
+- [x] ROADMAP rewrite (this file) reflecting the new architecture.
