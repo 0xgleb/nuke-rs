@@ -54,6 +54,10 @@ tower = { version = "0.5.3", default-features = false, features = ["util"] }
 apalis = "=1.0.0-rc.7"
 apalis-core = "=1.0.0-rc.7"
 apalis-workflow = "=0.1.0-rc.7"
+# Test-only file storage backend used by the policy -> DagFlow tests
+# to exercise apalis-workflow's Codec bounds end-to-end. Not used in
+# any framework or example runtime path.
+apalis-file-storage = "=0.1.0-rc.7"
 
 # Retry / backoff helpers used by the Job trait's `work` handler.
 backon = "1.6"

@@ -11,6 +11,7 @@ pub mod action;
 pub mod ast;
 pub mod backends;
 pub mod capability;
+pub mod ctx;
 mod decision;
 pub mod eval;
 mod macros;
@@ -19,6 +20,8 @@ pub mod registry;
 
 pub use action::Action;
 pub use capability::{Capability, Context, HasInventory, HasMarketData, HasOrder, HasRiskLimits};
+pub use ctx::{CtxError, PolicyCtx, PolicyCtxBuilder, SlotValueWire};
+pub use eval::{EvalError, evaluate};
 
 pub use ast::{
     BinOp, BinOpExpr, BoolT, CmpExpr, CmpOp, Comparable, DecT, Expr, ExprType, FieldRef, IfExpr,

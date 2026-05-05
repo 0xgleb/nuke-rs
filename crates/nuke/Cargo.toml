@@ -47,3 +47,7 @@ tracing-subscriber.workspace = true
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
 trybuild.workspace = true
+# Test backend for the policy -> DagFlow compiler. Mirrors what
+# apalis-workflow's own dag tests use (JsonStorage).
+apalis-file-storage.workspace = true
+serde_json.workspace = true
