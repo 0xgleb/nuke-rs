@@ -32,10 +32,12 @@
 //!
 //! `apalis-workflow`'s `add_node` requires a long chain of bounds on
 //! the backend type and its codec. Bundling them as a one-line
-//! supertrait via [`LowerBackend<I, O>`] keeps verb impls readable:
-//! `fn lower<B: LowerBackend<Self::Input, Self::Output>>`. Any
-//! backend that satisfies the underlying bounds gets the marker for
-//! free via the blanket impl.
+//! supertrait via [`LowerBackend<I, O, Err>`] keeps verb impls
+//! readable: `fn lower<B, Err>(...) where B: LowerBackend<Self::Input,
+//! Self::Output, Err>`. Any backend that satisfies the underlying
+//! bounds gets the marker for free via the blanket impl. `Err` is the
+//! shared codec error type; both `Codec<I>` and `Codec<O>` must agree
+//! on it so downstream tasks convert errors uniformly.
 
 use std::fmt::Debug;
 use std::future::Future;
@@ -143,11 +145,7 @@ pub fn add_node<'a, B, I, O, Err, F, Fut>(
 ) -> NodeBuilder<'a, I, O, B>
 where
     B: LowerBackend<I, O, Err>,
-    B::Context: Send + Sync + 'static,
-    B::IdType: Send + Sync + 'static,
-    B::Codec: Codec<I, Compact = B::Compact, Error = Err>
-        + Codec<O, Compact = B::Compact, Error = Err>
-        + 'static,
+    B::Codec: 'static,
     Err: Into<BoxDynError> + Send + 'static,
     I: DagCodec<B, Error = Err> + Send + Sync + 'static,
     O: IntoResponse<Output = O> + Send + Sync + 'static,

@@ -38,6 +38,10 @@ use crate::policy::decision::DecisionTag;
 use crate::policy::eval::{eval_bool, evaluate};
 use crate::policy::reason::Bindings;
 
+/// Name of the per-rule verdict task in the compiled DAG. Centralized
+/// so the literal can't drift across emit, audit, and tests.
+pub(crate) const VERDICT_NODE_NAME: &str = "policy/verdict";
+
 /// Compile a [`RuleNode<A>`] into a fresh
 /// [`apalis_workflow::DagFlow<B>`].
 ///
@@ -87,6 +91,13 @@ where
             // Lower the verb's sub-DAG. Verbs that want gating wire
             // their first node to depend on `gate.builder()`; verbs
             // that ignore the gate run unconditionally.
+            //
+            // TODO: collect the verb's terminal `NodeHandle` so future
+            // composition steps (All/Any joins, audit / emit nodes
+            // that depend on `A::Output`) can wire downstream.
+            // Per the [`crate::policy::action::Action`] contract the
+            // returned handle is the verb's terminal; right now we
+            // discard it because no downstream consumer exists yet.
             let _terminal = action.lower::<B, Err>(dag, gate);
         }
         RuleNode::RejectIf { condition, .. } | RuleNode::EscalateIf { condition, .. } => {
@@ -144,7 +155,7 @@ where
     Err: Into<BoxDynError> + Send + 'static,
 {
     dag.add_node(
-        "policy/verdict",
+        VERDICT_NODE_NAME,
         task_fn(move |ctx: PolicyCtx| {
             let rule = rule.clone();
             async move {
@@ -170,6 +181,17 @@ mod tests {
 
     fn d(value: i64) -> Decimal {
         Decimal::from(value)
+    }
+
+    /// Find the node index whose `label="..."` attribute matches
+    /// `label` in a petgraph-formatted dot string. Returns `None` if
+    /// the label isn't present.
+    fn node_index_by_label(dot: &str, label: &str) -> Option<usize> {
+        let needle = format!("label=\"{label}\"");
+        dot.lines()
+            .find(|line| line.contains(&needle))
+            .and_then(|line| line.split_whitespace().next())
+            .and_then(|idx| idx.parse::<usize>().ok())
     }
 
     #[test]
@@ -247,7 +269,7 @@ mod tests {
         let dot = dag.to_dot();
         assert!(!dot.contains("policy/predicate/"));
         assert!(
-            dot.contains("policy/verdict"),
+            dot.contains(VERDICT_NODE_NAME),
             "verdict node should always be emitted:\n{dot}"
         );
     }
@@ -270,7 +292,7 @@ mod tests {
             dot.contains("policy/predicate/0"),
             "predicate present:\n{dot}"
         );
-        assert!(dot.contains("policy/verdict"), "verdict present:\n{dot}");
+        assert!(dot.contains(VERDICT_NODE_NAME), "verdict present:\n{dot}");
     }
 
     /// Real `Action` impl that opts into the verdict gate. Used to
@@ -311,17 +333,19 @@ mod tests {
         dag.validate().expect("dag has no cycles");
 
         let dot = dag.to_dot();
-        // Both the verdict and the verb should appear, plus exactly
-        // one edge wiring them together (verdict -> verb).
-        assert!(dot.contains("verb/gated_noop"), "verb node present:\n{dot}");
+        // Petgraph's dot uses node indices in edges and surfaces the
+        // human-readable name only as a `label="..."` attribute on
+        // each node line. Resolve both indices from their labels and
+        // assert the specific edge (verdict -> verb) appears, instead
+        // of just counting `->` occurrences.
+        let verdict_idx = node_index_by_label(&dot, VERDICT_NODE_NAME)
+            .unwrap_or_else(|| panic!("verdict node missing in dot:\n{dot}"));
+        let verb_idx = node_index_by_label(&dot, "verb/gated_noop")
+            .unwrap_or_else(|| panic!("verb node missing in dot:\n{dot}"));
+        let expected_edge = format!("{verdict_idx} -> {verb_idx}");
         assert!(
-            dot.contains("policy/verdict"),
-            "verdict node present:\n{dot}"
-        );
-        let edge_count = dot.matches(" -> ").count();
-        assert_eq!(
-            edge_count, 1,
-            "expected exactly one edge (verdict -> verb):\n{dot}"
+            dot.contains(&expected_edge),
+            "expected edge {expected_edge} ({VERDICT_NODE_NAME} -> verb/gated_noop) in dot:\n{dot}"
         );
     }
 }

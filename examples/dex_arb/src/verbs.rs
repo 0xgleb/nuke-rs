@@ -3,15 +3,15 @@
 //! are adopter code, demonstrated here for the cross-DEX arb
 //! strategy.
 //!
-//! v0 lowers each verb to a single-node sub-DAG that captures the
-//! verb's inputs and (in the real impl) calls
-//! [`TradingVenue::place_trade`] / [`TradingVenue::check_inventory`]
-//! / etc. on an `Arc<V>` injected via `nuke::Job` context. For the
-//! example we keep the closure body minimal - the value here is the
-//! Action trait surface, not the venue I/O. Wiring the actual
-//! [`TradingVenue::place_trade`] flow lands when the per-node
-//! verdict-layer decomposition (the policy walker that currently
-//! only lowers `Do` leaves) is fleshed out.
+//! Each Buy / Sell / Short verb lowers to a single-node sub-DAG
+//! whose closure runs [`submit`]: it gates on the verdict and, on
+//! `Allow`, calls [`TradingVenue::place_trade`] on the injected
+//! `Arc<V>`, mapping the result into [`OrderResult`]
+//! (`Submitted` / `Failed`) or skipping with a typed [`DecisionTag`]
+//! on `Deny` / `Escalate`. [`Transfer`] follows the same shape with
+//! [`TransferResult`]. The verb's first node depends on the
+//! [`PolicyGate`]'s verdict task, so the venue call only fires after
+//! the per-rule verdict is computed.
 
 use std::sync::Arc;
 
@@ -21,6 +21,33 @@ use evm::EvmChain;
 use nuke::policy::{Action, DecisionTag};
 use nuke::{Ledger, Order, OrderId, OrderRequest, TradingVenue};
 use serde::{Deserialize, Serialize};
+
+/// Shared lowering for [`Buy`] / [`Sell`] / [`Short`]: add a single
+/// `submit` node under the given name whose closure clones the
+/// captured `venue` / `request` per invocation, runs [`submit`], and
+/// depends on the verdict gate. Each verb wires its own `KIND`-keyed
+/// node name (e.g. `verb.buy/submit`) so the DAG dot output stays
+/// readable, but the body is identical so it lives here.
+fn lower_submit<V, B, Err>(
+    dag: &DagFlow<B>,
+    gate: &nuke::policy::PolicyGate<'_, B>,
+    node_name: &str,
+    venue: Arc<V>,
+    request: OrderRequest,
+) -> NodeHandle<DecisionTag, OrderResult>
+where
+    V: TradingVenue<EvmChain, OrderRequest = OrderRequest, OrderId = OrderId, Order = Order>,
+    V: Send + Sync + 'static,
+    B: nuke::policy::LowerBackend<DecisionTag, OrderResult, Err>,
+    Err: Into<apalis_core::error::BoxDynError> + Send + 'static,
+{
+    let entry = nuke::policy::action::add_node(dag, node_name, move |verdict| {
+        let venue = Arc::clone(&venue);
+        let request = request.clone();
+        async move { submit(verdict, venue, request).await }
+    });
+    entry.depends_on(gate.builder())
+}
 
 /// Shared closure body for [`Buy`] / [`Sell`] / [`Short`]: gate on
 /// the verdict, otherwise call `venue.place_trade(request)` and map
@@ -37,9 +64,11 @@ where
                 error: format!("{error}"),
             },
         },
-        DecisionTag::Deny => OrderResult::Skipped { verdict: "deny" },
+        DecisionTag::Deny => OrderResult::Skipped {
+            verdict: DecisionTag::Deny,
+        },
         DecisionTag::Escalate => OrderResult::Skipped {
-            verdict: "escalate",
+            verdict: DecisionTag::Escalate,
         },
     }
 }
@@ -103,14 +132,13 @@ where
         B: nuke::policy::LowerBackend<Self::Input, Self::Output, Err>,
         Err: Into<apalis_core::error::BoxDynError> + Send + 'static,
     {
-        let venue = Arc::clone(&self.venue);
-        let request = self.request.clone();
-        let entry = nuke::policy::action::add_node(dag, "verb.buy/submit", move |verdict| {
-            let venue = Arc::clone(&venue);
-            let request = request.clone();
-            async move { submit(verdict, venue, request).await }
-        });
-        entry.depends_on(gate.builder())
+        lower_submit(
+            dag,
+            gate,
+            "verb.buy/submit",
+            Arc::clone(&self.venue),
+            self.request.clone(),
+        )
     }
 }
 
@@ -165,14 +193,13 @@ where
         B: nuke::policy::LowerBackend<Self::Input, Self::Output, Err>,
         Err: Into<apalis_core::error::BoxDynError> + Send + 'static,
     {
-        let venue = Arc::clone(&self.venue);
-        let request = self.request.clone();
-        let entry = nuke::policy::action::add_node(dag, "verb.sell/submit", move |verdict| {
-            let venue = Arc::clone(&venue);
-            let request = request.clone();
-            async move { submit(verdict, venue, request).await }
-        });
-        entry.depends_on(gate.builder())
+        lower_submit(
+            dag,
+            gate,
+            "verb.sell/submit",
+            Arc::clone(&self.venue),
+            self.request.clone(),
+        )
     }
 }
 
@@ -229,14 +256,13 @@ where
         B: nuke::policy::LowerBackend<Self::Input, Self::Output, Err>,
         Err: Into<apalis_core::error::BoxDynError> + Send + 'static,
     {
-        let venue = Arc::clone(&self.venue);
-        let request = self.request.clone();
-        let entry = nuke::policy::action::add_node(dag, "verb.short/submit", move |verdict| {
-            let venue = Arc::clone(&venue);
-            let request = request.clone();
-            async move { submit(verdict, venue, request).await }
-        });
-        entry.depends_on(gate.builder())
+        lower_submit(
+            dag,
+            gate,
+            "verb.short/submit",
+            Arc::clone(&self.venue),
+            self.request.clone(),
+        )
     }
 }
 
@@ -299,13 +325,15 @@ impl<F: Ledger, T: Ledger> Action for Transfer<F, T> {
             move |verdict| async move {
                 match verdict {
                     DecisionTag::Allow => TransferResult::Initiated {
-                        from: from_name,
-                        to: to_name,
+                        from: from_name.to_string(),
+                        to: to_name.to_string(),
                         amount_qty,
                     },
-                    DecisionTag::Deny => TransferResult::Skipped { verdict: "deny" },
+                    DecisionTag::Deny => TransferResult::Skipped {
+                        verdict: DecisionTag::Deny,
+                    },
                     DecisionTag::Escalate => TransferResult::Skipped {
-                        verdict: "escalate",
+                        verdict: DecisionTag::Escalate,
                     },
                 }
             },
@@ -330,9 +358,9 @@ pub enum OrderResult {
         request_qty: nuke::domain::Qty,
     },
     /// Policy verdict was non-`Allow`; the verb skipped the venue
-    /// call entirely. The `&'static str` is the verdict tag string
-    /// (`"deny"` / `"escalate"`).
-    Skipped { verdict: &'static str },
+    /// call entirely. Carries the typed verdict tag so consumers can
+    /// branch on `Deny` / `Escalate` without parsing strings.
+    Skipped { verdict: DecisionTag },
     /// `TradingVenue::place_trade` returned an error.
     Failed { error: String },
 }
@@ -347,12 +375,12 @@ pub enum OrderResult {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TransferResult {
     Initiated {
-        from: &'static str,
-        to: &'static str,
+        from: String,
+        to: String,
         amount_qty: nuke::domain::Notional,
     },
     Skipped {
-        verdict: &'static str,
+        verdict: DecisionTag,
     },
 }
 
@@ -491,9 +519,11 @@ mod tests {
 
     #[test]
     fn order_result_skipped_carries_verdict_tag() {
-        let result = OrderResult::Skipped { verdict: "deny" };
+        let result = OrderResult::Skipped {
+            verdict: DecisionTag::Deny,
+        };
         match result {
-            OrderResult::Skipped { verdict } => assert_eq!(verdict, "deny"),
+            OrderResult::Skipped { verdict } => assert_eq!(verdict, DecisionTag::Deny),
             other => panic!("expected Skipped, got {other:?}"),
         }
     }
@@ -501,8 +531,8 @@ mod tests {
     #[test]
     fn transfer_result_initiated_carries_endpoint_names() {
         let result = TransferResult::Initiated {
-            from: "drift-v2",
-            to: "hyperliquid",
+            from: "drift-v2".to_string(),
+            to: "hyperliquid".to_string(),
             amount_qty: Notional::new(d(42)),
         };
         match result {
@@ -512,5 +542,133 @@ mod tests {
             }
             other => panic!("expected Initiated, got {other:?}"),
         }
+    }
+
+    /// Mock [`TradingVenue<EvmChain>`] whose [`place_trade`] returns a
+    /// preconfigured `Result`. Behaviour tests for [`submit`] use this
+    /// to exercise the Allow / Deny / Escalate branches and the
+    /// place_trade Ok / Err mapping without touching real RPC.
+    #[derive(Debug)]
+    struct MockVenue {
+        venue: EvmVenue,
+        outcome: MockOutcome,
+    }
+
+    #[derive(Debug, Clone)]
+    enum MockOutcome {
+        Ok(OrderId),
+        Err(&'static str),
+    }
+
+    #[derive(Debug)]
+    struct MockError(&'static str);
+
+    impl std::fmt::Display for MockError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", self.0)
+        }
+    }
+
+    impl std::error::Error for MockError {}
+
+    impl nuke::Venue<EvmChain> for MockVenue {
+        type Id = EvmVenueId;
+        type OrderId = OrderId;
+        type OrderRequest = OrderRequest;
+        type Order = Order;
+        type Inventory = nuke::Inventory;
+
+        fn id(&self) -> &Self::Id {
+            &self.venue.id
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl TradingVenue<EvmChain> for MockVenue {
+        type Error = MockError;
+
+        async fn check_inventory(&self) -> Result<Self::Inventory, Self::Error> {
+            Err(MockError("not used in tests"))
+        }
+
+        async fn place_trade(
+            &self,
+            _request: Self::OrderRequest,
+        ) -> Result<Self::OrderId, Self::Error> {
+            match &self.outcome {
+                MockOutcome::Ok(id) => Ok(id.clone()),
+                MockOutcome::Err(msg) => Err(MockError(msg)),
+            }
+        }
+
+        async fn check_order(&self, _id: &Self::OrderId) -> Result<Self::Order, Self::Error> {
+            Err(MockError("not used in tests"))
+        }
+    }
+
+    fn mock_venue(outcome: MockOutcome) -> Arc<MockVenue> {
+        Arc::new(MockVenue {
+            venue: EvmVenue {
+                id: EvmVenueId {
+                    address: alloy_primitives::address!("0000000000000000000000000000000000000002"),
+                },
+            },
+            outcome,
+        })
+    }
+
+    #[tokio::test]
+    async fn submit_allow_with_ok_returns_submitted_with_passed_qty_and_id() {
+        let venue = mock_venue(MockOutcome::Ok(OrderId::new("VENUE-OK")));
+        let request = OrderRequest {
+            qty: Qty::new(d(13)),
+            ..sample_request()
+        };
+        let result = submit(DecisionTag::Allow, venue, request).await;
+        assert_eq!(
+            result,
+            OrderResult::Submitted {
+                id: OrderId::new("VENUE-OK"),
+                request_qty: Qty::new(d(13)),
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn submit_allow_with_err_returns_failed_carrying_formatted_error_string() {
+        let venue = mock_venue(MockOutcome::Err("rpc unreachable"));
+        let result = submit(DecisionTag::Allow, venue, sample_request()).await;
+        // submit uses `format!("{e}")` (Display), not Debug, so the
+        // payload should be the venue error's Display string verbatim.
+        assert_eq!(
+            result,
+            OrderResult::Failed {
+                error: "rpc unreachable".to_string(),
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn submit_deny_skips_venue_and_returns_typed_skipped() {
+        let venue = mock_venue(MockOutcome::Err("must not be called"));
+        let result = submit(DecisionTag::Deny, venue, sample_request()).await;
+        assert_eq!(
+            result,
+            OrderResult::Skipped {
+                verdict: DecisionTag::Deny,
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn submit_escalate_skips_venue_and_returns_typed_skipped() {
+        let venue = mock_venue(MockOutcome::Err("must not be called"));
+        let result = submit(DecisionTag::Escalate, venue, sample_request()).await;
+        assert_eq!(
+            result,
+            OrderResult::Skipped {
+                verdict: DecisionTag::Escalate,
+            }
+        );
     }
 }
