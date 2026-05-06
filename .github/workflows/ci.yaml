@@ -87,7 +87,15 @@ jobs:
         fi
         echo "Compiled in workspace-deps phase (via 'nix log $deps_path'):"
         echo "---"
-        nix log "$deps_path" 2>/dev/null \
-          | grep -E 'Compiling [a-z_-]+ v|^\+\+\+ command|^error' \
-          | head -200 \
-          || echo "(deps log empty)"
+        # Strip ANSI escape codes so simple grep over `Compiling` works.
+        deps_log_clean=$(nix log "$deps_path" 2>/dev/null \
+          | sed -E 's/\x1b\[[0-9;]*[A-Za-z]//g' || true)
+        if [ -z "$deps_log_clean" ]; then
+          echo "(deps log empty)"
+          exit 0
+        fi
+        echo "[secretspec mentions:]"
+        printf '%s\n' "$deps_log_clean" | grep -E '(Compiling|Checking) secretspec' || echo "(none - secretspec was NOT compiled in deps phase)"
+        echo
+        echo "[last 80 lines of deps log:]"
+        printf '%s\n' "$deps_log_clean" | tail -n 80
