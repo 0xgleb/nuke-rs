@@ -118,6 +118,12 @@ fn render_expr(expr: &InnerExpr) -> String {
             .map(render_expr)
             .collect::<Vec<_>>()
             .join(" OR "),
+        InnerExpr::If(node) => format!(
+            "(if {} then {} else {})",
+            render_expr(&node.cond),
+            render_expr(&node.then),
+            render_expr(&node.otherwise),
+        ),
     }
 }
 

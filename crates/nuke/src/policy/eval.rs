@@ -154,6 +154,13 @@ fn eval_expr<C: Context>(
             }
             Ok(SlotValue::Bool(false))
         }
+        InnerExpr::If(node) => {
+            if as_bool(&eval_expr(&node.cond, ctx, bindings)?)? {
+                eval_expr(&node.then, ctx, bindings)
+            } else {
+                eval_expr(&node.otherwise, ctx, bindings)
+            }
+        }
     }
 }
 

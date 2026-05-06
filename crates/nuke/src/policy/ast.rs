@@ -205,6 +205,19 @@ pub fn field<T: ExprType>(entity: &'static str, name: &'static str) -> Expr<T> {
     Expr::from_inner(InnerExpr::Field(FieldRef { entity, name }))
 }
 
+/// `if cond then a else b` typed conditional. Both branches share the
+/// same result tag `T`, so the conditional itself is `Expr<T>`. Used
+/// by [`crate::bind_as!`] to capture conditional values into the
+/// bindings table (e.g. `let trade_size_multiplier = if
+/// nyse_market_open then 1.5 else 1.0`).
+pub fn if_else<T: ExprType>(cond: Expr<BoolT>, then: Expr<T>, otherwise: Expr<T>) -> Expr<T> {
+    Expr::from_inner(InnerExpr::If(IfExpr {
+        cond: Box::new(cond.0),
+        then: Box::new(then.0),
+        otherwise: Box::new(otherwise.0),
+    }))
+}
+
 /// Equality comparison. Polymorphic over any [`ExprType`] (`Bool` and
 /// type-tagged primitives all admit equality).
 pub fn eq<T: ExprType>(lhs: Expr<T>, rhs: Expr<T>) -> Expr<BoolT> {
@@ -284,6 +297,19 @@ pub enum InnerExpr {
     /// Read a previously-bound slot value (introduced by
     /// [`RuleNode::Bind`]).
     Slot(SlotName),
+    /// `if cond then a else b` - typed conditional expression. The
+    /// `then`/`otherwise` branches share the same `Expr<T>` type tag
+    /// at construction (enforced by [`Expr::if_else`]); this layer
+    /// is type-erased for backend folds.
+    If(IfExpr),
+}
+
+/// `if cond then a else b` node body.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct IfExpr {
+    pub cond: Box<InnerExpr>,
+    pub then: Box<InnerExpr>,
+    pub otherwise: Box<InnerExpr>,
 }
 
 /// A literal value of any supported domain type.
@@ -430,6 +456,17 @@ mod tests {
 
     fn d(value: i64) -> Decimal {
         Decimal::from(value)
+    }
+
+    #[test]
+    fn if_else_yields_typed_expr_of_branch_type() {
+        // Both branches are `Expr<DecT>`, so the conditional itself is `Expr<DecT>`.
+        let expr = if_else::<DecT>(
+            Expr::<BoolT>::lit(true),
+            Expr::<DecT>::lit(d(1)),
+            Expr::<DecT>::lit(d(2)),
+        );
+        assert!(matches!(expr.inner(), InnerExpr::If(_)));
     }
 
     #[test]
