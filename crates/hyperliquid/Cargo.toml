@@ -8,30 +8,10 @@ description = "Hyperliquid Source / TradingVenue adapter for the nuke framework.
 [lib]
 path = "src/lib.rs"
 
+# The lib.rs body is currently a stub - no code, no impls. Adding deps
+# here that aren't actually used widens the workspace dep tree and the
+# Cargo.lock unification scope without delivering anything. The
+# hyperliquid_rust_sdk / async-trait / tokio / serde / rust_decimal /
+# thiserror / tracing entries come back as soon as the Source +
+# TradingVenue impls land.
 [dependencies]
-nuke.workspace = true
-
-# The official Hyperliquid SDK does the wire / auth / EIP-712 work.
-# We adapt its types to nuke's traits; we do not re-implement what
-# it provides.
-hyperliquid_rust_sdk.workspace = true
-
-# Async + traits
-async-trait.workspace = true
-futures-util.workspace = true
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync"] }
-
-# Serde (for the per-Subject Id / event types we expose)
-serde.workspace = true
-
-# Domain primitives - Decimal everywhere, never f64.
-rust_decimal.workspace = true
-
-# Error wrapping
-thiserror.workspace = true
-
-# Observability
-tracing.workspace = true
-
-[dev-dependencies]
-tokio = { workspace = true, features = ["full", "test-util"] }
