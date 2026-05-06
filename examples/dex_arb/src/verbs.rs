@@ -14,6 +14,7 @@
 //! the per-rule verdict is computed.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use apalis_workflow::DagFlow;
 use apalis_workflow::dag::NodeHandle;
@@ -34,6 +35,7 @@ fn lower_submit<V, B, Err>(
     node_name: &str,
     venue: Arc<V>,
     request: OrderRequest,
+    place_timeout: Duration,
 ) -> NodeHandle<DecisionTag, OrderResult>
 where
     V: TradingVenue<EvmChain, OrderRequest = OrderRequest, OrderId = OrderId, Order = Order>,
@@ -44,27 +46,45 @@ where
     let entry = nuke::policy::action::add_node(dag, node_name, move |verdict| {
         let venue = Arc::clone(&venue);
         let request = request.clone();
-        async move { submit(verdict, venue, request).await }
+        async move { submit(verdict, venue, request, place_timeout).await }
     });
     entry.depends_on(gate.builder())
 }
 
 /// Shared closure body for [`Buy`] / [`Sell`] / [`Short`]: gate on
-/// the verdict, otherwise call `venue.place_trade(request)` and map
-/// the outcome into [`OrderResult`].
-async fn submit<V>(verdict: DecisionTag, venue: Arc<V>, request: OrderRequest) -> OrderResult
+/// the verdict, otherwise call `venue.place_trade(request)` under a
+/// `tokio::time::timeout(place_timeout, ...)` so a stalled venue can
+/// never hang the reactor.
+///
+/// Failure shape on `Allow`:
+/// - `Ok(id)`                                  -> `Submitted { id, request_qty }`
+/// - `Err(error)`                              -> `Failed { error: format!("{error}") }`
+/// - timeout (`tokio::time::error::Elapsed`)   -> `Failed { error: "timeout: ..." }`
+///
+/// The `timeout:` prefix lets callers classify transient venue stalls
+/// without re-parsing arbitrary RPC error strings.
+async fn submit<V>(
+    verdict: DecisionTag,
+    venue: Arc<V>,
+    request: OrderRequest,
+    place_timeout: Duration,
+) -> OrderResult
 where
     V: TradingVenue<EvmChain, OrderRequest = OrderRequest, OrderId = OrderId, Order = Order>,
 {
     let request_qty = request.qty;
     match verdict {
-        // Production strategies should wrap this in `tokio::time::timeout(...)` to avoid hanging the reactor on a stalled venue.
-        DecisionTag::Allow => match venue.place_trade(request).await {
-            Ok(id) => OrderResult::Submitted { id, request_qty },
-            Err(error) => OrderResult::Failed {
-                error: format!("{error}"),
-            },
-        },
+        DecisionTag::Allow => {
+            match tokio::time::timeout(place_timeout, venue.place_trade(request)).await {
+                Ok(Ok(id)) => OrderResult::Submitted { id, request_qty },
+                Ok(Err(error)) => OrderResult::Failed {
+                    error: format!("{error}"),
+                },
+                Err(_elapsed) => OrderResult::Failed {
+                    error: format!("timeout: place_trade exceeded {place_timeout:?}"),
+                },
+            }
+        }
         DecisionTag::Deny => OrderResult::Skipped {
             verdict: DecisionTag::Deny,
         },
@@ -78,14 +98,21 @@ where
 /// [`TradingVenue<L>`] whose value-object types match the
 /// framework's [`OrderRequest`] / [`OrderId`] / [`Order`] vocabulary.
 ///
+/// `place_timeout` bounds the `venue.place_trade` call so a stalled
+/// venue cannot hang the reactor; the lowered submit node converts an
+/// elapsed timeout into a typed [`OrderResult::Failed`] with a
+/// `"timeout: ..."`-prefixed error string.
+///
 /// In a strategy: `policy! { given [spread.lt(zero)] then do
-/// Buy { qty, instrument, venue } }` (modulo the macro shape).
+/// Buy { qty, instrument, venue, place_timeout } }` (modulo the macro
+/// shape).
 pub struct Buy<V>
 where
     V: TradingVenue<EvmChain, OrderRequest = OrderRequest, OrderId = OrderId, Order = Order>,
 {
     pub request: OrderRequest,
     pub venue: Arc<V>,
+    pub place_timeout: Duration,
 }
 
 // Manual Clone / Debug so the derives don't drag spurious `V: Clone`
@@ -99,6 +126,7 @@ where
         Self {
             request: self.request.clone(),
             venue: Arc::clone(&self.venue),
+            place_timeout: self.place_timeout,
         }
     }
 }
@@ -111,6 +139,7 @@ where
         f.debug_struct("Buy")
             .field("request", &self.request)
             .field("venue", &"<Arc<V>>")
+            .field("place_timeout", &self.place_timeout)
             .finish()
     }
 }
@@ -139,6 +168,7 @@ where
             "verb.buy/submit",
             Arc::clone(&self.venue),
             self.request.clone(),
+            self.place_timeout,
         )
     }
 }
@@ -150,6 +180,7 @@ where
 {
     pub request: OrderRequest,
     pub venue: Arc<V>,
+    pub place_timeout: Duration,
 }
 
 impl<V> Clone for Sell<V>
@@ -160,6 +191,7 @@ where
         Self {
             request: self.request.clone(),
             venue: Arc::clone(&self.venue),
+            place_timeout: self.place_timeout,
         }
     }
 }
@@ -172,6 +204,7 @@ where
         f.debug_struct("Sell")
             .field("request", &self.request)
             .field("venue", &"<Arc<V>>")
+            .field("place_timeout", &self.place_timeout)
             .finish()
     }
 }
@@ -200,6 +233,7 @@ where
             "verb.sell/submit",
             Arc::clone(&self.venue),
             self.request.clone(),
+            self.place_timeout,
         )
     }
 }
@@ -213,6 +247,7 @@ where
 {
     pub request: OrderRequest,
     pub venue: Arc<V>,
+    pub place_timeout: Duration,
 }
 
 impl<V> Clone for Short<V>
@@ -223,6 +258,7 @@ where
         Self {
             request: self.request.clone(),
             venue: Arc::clone(&self.venue),
+            place_timeout: self.place_timeout,
         }
     }
 }
@@ -235,6 +271,7 @@ where
         f.debug_struct("Short")
             .field("request", &self.request)
             .field("venue", &"<Arc<V>>")
+            .field("place_timeout", &self.place_timeout)
             .finish()
     }
 }
@@ -263,6 +300,7 @@ where
             "verb.short/submit",
             Arc::clone(&self.venue),
             self.request.clone(),
+            self.place_timeout,
         )
     }
 }
@@ -435,6 +473,13 @@ mod tests {
         })
     }
 
+    /// Generous timeout for tests that don't exercise the elapsed
+    /// path - large enough that the mock's synchronous Ok / Err
+    /// completes well before it fires.
+    fn sample_timeout() -> Duration {
+        Duration::from_secs(60)
+    }
+
     /// Concrete [`LedgerHandle`] used by the Transfer test below.
     /// Real strategies wire their own per-venue handles here.
     #[derive(Debug)]
@@ -453,6 +498,7 @@ mod tests {
         let buy: Buy<EvmRpcVenue> = Buy {
             request: sample_request(),
             venue: sample_venue(),
+            place_timeout: sample_timeout(),
         };
         assert_eq!(<Buy<EvmRpcVenue> as Action>::KIND, "verb.buy");
         assert_eq!(buy.request.qty, Qty::new(d(1)));
@@ -471,6 +517,7 @@ mod tests {
         let sell: Sell<EvmRpcVenue> = Sell {
             request: sample_request(),
             venue: sample_venue(),
+            place_timeout: sample_timeout(),
         };
         assert_eq!(<Sell<EvmRpcVenue> as Action>::KIND, "verb.sell");
         assert_eq!(sell.request.instrument, Symbol::new("WETH/USDC"));
@@ -481,6 +528,7 @@ mod tests {
         let short: Short<EvmRpcVenue> = Short {
             request: sample_request(),
             venue: sample_venue(),
+            place_timeout: sample_timeout(),
         };
         assert_eq!(<Short<EvmRpcVenue> as Action>::KIND, "verb.short");
         assert_eq!(short.request.qty, Qty::new(d(1)));
@@ -559,6 +607,9 @@ mod tests {
     enum MockOutcome {
         Ok(OrderId),
         Err(&'static str),
+        /// Sleep `Duration` before returning - used to drive the
+        /// `tokio::time::timeout` elapsed branch in [`submit`].
+        Slow(Duration),
     }
 
     #[derive(Debug)]
@@ -599,6 +650,10 @@ mod tests {
             match &self.outcome {
                 MockOutcome::Ok(id) => Ok(id.clone()),
                 MockOutcome::Err(msg) => Err(MockError(msg)),
+                MockOutcome::Slow(duration) => {
+                    tokio::time::sleep(*duration).await;
+                    Err(MockError("slow path completed past timeout"))
+                }
             }
         }
 
@@ -625,7 +680,7 @@ mod tests {
             qty: Qty::new(d(13)),
             ..sample_request()
         };
-        let result = submit(DecisionTag::Allow, venue, request).await;
+        let result = submit(DecisionTag::Allow, venue, request, sample_timeout()).await;
         assert_eq!(
             result,
             OrderResult::Submitted {
@@ -638,7 +693,13 @@ mod tests {
     #[tokio::test]
     async fn submit_allow_with_err_returns_failed_carrying_formatted_error_string() {
         let venue = mock_venue(MockOutcome::Err("rpc unreachable"));
-        let result = submit(DecisionTag::Allow, venue, sample_request()).await;
+        let result = submit(
+            DecisionTag::Allow,
+            venue,
+            sample_request(),
+            sample_timeout(),
+        )
+        .await;
         // submit uses `format!("{e}")` (Display), not Debug, so the
         // payload should be the venue error's Display string verbatim.
         assert_eq!(
@@ -652,7 +713,7 @@ mod tests {
     #[tokio::test]
     async fn submit_deny_skips_venue_and_returns_typed_skipped() {
         let venue = mock_venue(MockOutcome::Err("must not be called"));
-        let result = submit(DecisionTag::Deny, venue, sample_request()).await;
+        let result = submit(DecisionTag::Deny, venue, sample_request(), sample_timeout()).await;
         assert_eq!(
             result,
             OrderResult::Skipped {
@@ -664,12 +725,39 @@ mod tests {
     #[tokio::test]
     async fn submit_escalate_skips_venue_and_returns_typed_skipped() {
         let venue = mock_venue(MockOutcome::Err("must not be called"));
-        let result = submit(DecisionTag::Escalate, venue, sample_request()).await;
+        let result = submit(
+            DecisionTag::Escalate,
+            venue,
+            sample_request(),
+            sample_timeout(),
+        )
+        .await;
         assert_eq!(
             result,
             OrderResult::Skipped {
                 verdict: DecisionTag::Escalate,
             }
         );
+    }
+
+    #[tokio::test]
+    async fn submit_allow_classifies_elapsed_timeout_into_failed_with_timeout_prefix() {
+        // Mock sleeps for 1s; submit's place_timeout is 10ms, so the
+        // tokio::time::timeout fires before place_trade returns. The
+        // outcome must be Failed with a `"timeout:"`-prefixed string
+        // so callers can branch on stalls vs. RPC errors without
+        // re-parsing arbitrary venue messages.
+        let venue = mock_venue(MockOutcome::Slow(Duration::from_secs(1)));
+        let place_timeout = Duration::from_millis(10);
+        let result = submit(DecisionTag::Allow, venue, sample_request(), place_timeout).await;
+        match result {
+            OrderResult::Failed { error } => {
+                assert!(
+                    error.starts_with("timeout:"),
+                    "expected timeout-prefixed error, got: {error}",
+                );
+            }
+            other => panic!("expected Failed, got {other:?}"),
+        }
     }
 }
