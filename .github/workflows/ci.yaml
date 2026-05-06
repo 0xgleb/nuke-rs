@@ -45,9 +45,26 @@ jobs:
     - name: "build check: ${{ matrix.check }}"
       run: nix build --accept-flake-config ".#checks.x86_64-linux.${{ matrix.check }}"
 
-    # On failure, surface the failed derivation's stderr in full so
-    # the GitHub Actions log includes the cargo error context that
-    # `nix build`'s tail summary truncates.
-    - name: "show full log on failure"
+    # On failure, GitHub's UI truncates the previous step's stdout
+    # because `nix build` streams `building '/nix/store/...drv'`
+    # lines for every dep. Nix's own "Last 25 log lines" tail with
+    # the cargo error gets buried near the truncation cliff. Re-print
+    # just the last 100 lines of the failed derivation's build log
+    # as a small dedicated step so the actual error is always
+    # visible at the END of the workflow log (where GitHub doesn't
+    # truncate). Also emit a `::error::` annotation for each cargo
+    # `error[Exxxx]:` line so the GitHub Checks UI surfaces them.
+    - name: "tail derivation log on failure"
       if: failure()
-      run: nix log ".#checks.x86_64-linux.${{ matrix.check }}" || true
+      run: |
+        log=$(nix log ".#checks.x86_64-linux.${{ matrix.check }}" 2>/dev/null || true)
+        if [ -z "$log" ]; then
+          echo "(no derivation log available)"
+          exit 0
+        fi
+        printf '%s\n' "$log" | tail -n 100
+        printf '%s\n' "$log" \
+          | grep -oE 'error(\[E[0-9]+\])?: [^[:cntrl:]]+' \
+          | sort -u \
+          | head -10 \
+          | while IFS= read -r line; do echo "::error::${line}"; done
