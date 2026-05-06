@@ -68,3 +68,26 @@ jobs:
           | sort -u \
           | head -10 \
           | while IFS= read -r line; do echo "::error::${line}"; done
+
+    # The check phase fails when the workspace-deps cache is missing
+    # an artifact (e.g. a proc-macro not compiled on Linux for some
+    # reason). To diagnose, dump the deps drv's log too: pull the
+    # `nuke-workspace-deps-*` store path out of the failed check log
+    # and ask nix for its build log.
+    - name: "tail workspace-deps log on failure"
+      if: failure()
+      run: |
+        log=$(nix log ".#checks.x86_64-linux.${{ matrix.check }}" 2>/dev/null || true)
+        deps_path=$(printf '%s\n' "$log" \
+          | grep -oE '/nix/store/[a-z0-9]+-nuke-workspace-deps-[^ ]+' \
+          | head -1)
+        if [ -z "$deps_path" ]; then
+          echo "(could not locate nuke-workspace-deps store path)"
+          exit 0
+        fi
+        echo "Compiled in workspace-deps phase (via 'nix log $deps_path'):"
+        echo "---"
+        nix log "$deps_path" 2>/dev/null \
+          | grep -E 'Compiling [a-z_-]+ v|^\+\+\+ command|^error' \
+          | head -200 \
+          || echo "(deps log empty)"
