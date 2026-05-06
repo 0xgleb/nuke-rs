@@ -186,6 +186,12 @@ mod tests {
     /// Find the node index whose `label="..."` attribute matches
     /// `label` in a petgraph-formatted dot string. Returns `None` if
     /// the label isn't present.
+    ///
+    /// Tightly coupled to petgraph's Dot output: assumes each node
+    /// line starts with the index and contains `label="<name>"`
+    /// verbatim (no spaces around `=`, no escaping inside the label),
+    /// e.g. `    0 [ label="verdict.r" ]`. Changes to petgraph's Dot
+    /// formatter can break this helper.
     fn node_index_by_label(dot: &str, label: &str) -> Option<usize> {
         let needle = format!("label=\"{label}\"");
         dot.lines()

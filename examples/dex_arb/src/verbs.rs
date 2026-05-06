@@ -58,6 +58,7 @@ where
 {
     let request_qty = request.qty;
     match verdict {
+        // Production strategies should wrap this in `tokio::time::timeout(...)` to avoid hanging the reactor on a stalled venue.
         DecisionTag::Allow => match venue.place_trade(request).await {
             Ok(id) => OrderResult::Submitted { id, request_qty },
             Err(error) => OrderResult::Failed {
