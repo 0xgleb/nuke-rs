@@ -6,6 +6,7 @@ members = [
   "crates/event-sorcery",
   "crates/evm",
   "crates/evm-derive",
+  "crates/hyperliquid",
   "examples/dex_arb",
   "examples/uptime_monitor",
 ]
@@ -65,6 +66,12 @@ backon = "1.6"
 # EVM types (used by the `evm` adapter crate; framework crates do not depend on these)
 alloy-primitives = { version = "1.5", features = ["serde"] }
 alloy-sol-types = "1.5"
+
+# Hyperliquid SDK (used by the `hyperliquid` adapter crate; framework
+# crates do not depend on this). Pulls in legacy `ethers 2.0.14` for
+# its EIP-712 signing path - acceptable as a transitive dep for an
+# adapter crate that already lives outside the framework boundary.
+hyperliquid_rust_sdk = "0.6.0"
 
 # Domain primitives - Decimal everywhere, never f64 (see CLAUDE.md).
 rust_decimal = { version = "1.41", features = ["serde"] }
