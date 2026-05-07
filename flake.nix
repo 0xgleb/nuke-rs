@@ -92,46 +92,12 @@
           # dotenv, etc.). The build-time macro just generates types
           # against the secretspec.toml schema; no provider lookup
           # happens until runtime, so the build is hermetic.
-
-          # `target/` (the cargoArtifacts cache) holds proc-macro
-          # `.so` files on Linux that `rustc` loads via dlopen at the
-          # consumer's compile time. The default Nix fixupPhase
-          # (strip + patchELF) and crane's reference-stripping hooks
-          # (sed rewrites of toolchain / vendor-dir store hashes)
-          # both touch those `.so`'s and have been observed to
-          # corrupt them just enough that `rustc` fails with
-          # `E0463 "can't find crate"` for the proc-macro in the
-          # downstream check phase. The `target/` cache is never
-          # shipped as a runtime closure, so the size / determinism
-          # benefits are not worth the corruption risk. Disable all
-          # four hooks for cargoArtifacts and consumers alike.
-          doNotRemoveReferencesToRustToolchain = true;
-          doNotRemoveReferencesToVendorDir = true;
-          dontStrip = true;
-          dontPatchELF = true;
         };
 
         # Builds every workspace dep as a separate derivation that
         # downstream checks reuse (so `cargo clippy`, `cargo test`,
         # and `cargo build` don't each recompile the dep tree).
-        #
-        # We pass `dummySrc = src` so the deps phase compiles against
-        # the REAL workspace source instead of crane's stubbed
-        # version. Reason: `examples/dex_arb/src/main.rs` invokes
-        # `secretspec_derive::declare_secrets!("../../secretspec.toml")`
-        # at the top level. If the deps phase compiles a stubbed
-        # `pub fn main() {}` instead, cargo never expands the macro
-        # there - and on Linux the resulting cargoArtifacts cache
-        # somehow ends up missing a usable `libsecretspec_derive*.so`
-        # by the time downstream checks decompress it (consumer fails
-        # with `E0463 "can't find crate"`). Compiling the real macro
-        # invocation in the deps phase forces cargo to materialize
-        # the proc-macro artifact properly.
-        #
-        # The trade-off is cache invalidation: any change under
-        # `src` re-runs the deps phase. Acceptable for CI since each
-        # PR gets a fresh runner anyway.
-        cargoArtifacts = craneLib.buildDepsOnly (commonArgs // { dummySrc = src; });
+        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 
         hooks = {
           actionlint.enable = true;
