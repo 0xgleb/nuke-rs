@@ -92,6 +92,20 @@
           # dotenv, etc.). The build-time macro just generates types
           # against the secretspec.toml schema; no provider lookup
           # happens until runtime, so the build is hermetic.
+
+          # Crane's default postInstall hooks `sed`-rewrite all files
+          # in `target/` (used as the cargoArtifacts cache) to strip
+          # references to the Rust toolchain and vendored sources, so
+          # the consumer derivation closure stays small. The
+          # rewrites are same-length store-hash substitutions, but on
+          # Linux they hit proc-macro `.so` files in
+          # `target/release/deps/` and corrupt them just enough that
+          # `rustc` fails to load the proc-macro at compile time
+          # (E0463 "can't find crate"). We don't ship `target/` as a
+          # runtime artifact, so the closure-size optimization isn't
+          # worth the corruption. Disable both hooks.
+          doNotRemoveReferencesToRustToolchain = true;
+          doNotRemoveReferencesToVendorDir = true;
         };
 
         # Builds every workspace dep as a separate derivation that
