@@ -93,19 +93,22 @@
           # against the secretspec.toml schema; no provider lookup
           # happens until runtime, so the build is hermetic.
 
-          # Crane's default postInstall hooks `sed`-rewrite all files
-          # in `target/` (used as the cargoArtifacts cache) to strip
-          # references to the Rust toolchain and vendored sources, so
-          # the consumer derivation closure stays small. The
-          # rewrites are same-length store-hash substitutions, but on
-          # Linux they hit proc-macro `.so` files in
-          # `target/release/deps/` and corrupt them just enough that
-          # `rustc` fails to load the proc-macro at compile time
-          # (E0463 "can't find crate"). We don't ship `target/` as a
-          # runtime artifact, so the closure-size optimization isn't
-          # worth the corruption. Disable both hooks.
+          # `target/` (the cargoArtifacts cache) holds proc-macro
+          # `.so` files on Linux that `rustc` loads via dlopen at the
+          # consumer's compile time. The default Nix fixupPhase
+          # (strip + patchELF) and crane's reference-stripping hooks
+          # (sed rewrites of toolchain / vendor-dir store hashes)
+          # both touch those `.so`'s and have been observed to
+          # corrupt them just enough that `rustc` fails with
+          # `E0463 "can't find crate"` for the proc-macro in the
+          # downstream check phase. The `target/` cache is never
+          # shipped as a runtime closure, so the size / determinism
+          # benefits are not worth the corruption risk. Disable all
+          # four hooks for cargoArtifacts and consumers alike.
           doNotRemoveReferencesToRustToolchain = true;
           doNotRemoveReferencesToVendorDir = true;
+          dontStrip = true;
+          dontPatchELF = true;
         };
 
         # Builds every workspace dep as a separate derivation that
