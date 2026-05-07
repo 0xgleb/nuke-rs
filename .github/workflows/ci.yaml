@@ -39,6 +39,14 @@ jobs:
     steps:
     - uses: actions/checkout@v5
 
+    # `secretspec` -> `keyring` -> `libdbus-sys` link against the
+    # system D-Bus on Linux; without `libdbus-1-dev` the build
+    # script panics with `pkg_config failed`. `pkg-config` is the
+    # discovery tool the build script invokes. The nix flake handles
+    # this via `buildInputs`; on plain GitHub runners we apt-install.
+    - name: install system deps
+      run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libdbus-1-dev pkg-config
+
     # The toolchain version is read from `rust-toolchain.toml` if
     # present; otherwise dtolnay/rust-toolchain falls back to the
     # `toolchain` arg below. We pin to nightly so the workspace's
