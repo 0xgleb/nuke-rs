@@ -60,6 +60,18 @@ jobs:
     - name: ${{ matrix.name }}
       run: nix develop --accept-flake-config .#ci -c ${{ matrix.command }}
 
+    # On failure, dump everything that rustc would have looked at when
+    # loading proc-macro `.so` files. The build/test/clippy runs hit
+    # E0463 for `secretspec_derive` on Linux but pass on Darwin; the
+    # delta usually shows up in the deps dir (artifact missing or wrong
+    # extension) or in cargo's verbose rustc invocation.
+    - name: dump cargo deps on failure
+      if: failure()
+      run: ls -la target/debug/deps/
+    - name: rebuild dex-arb verbosely on failure
+      if: failure()
+      run: nix develop --accept-flake-config .#ci -c cargo build -vv -p dex-arb --locked
+
   hooks:
     runs-on: ubuntu-latest
     permissions:
