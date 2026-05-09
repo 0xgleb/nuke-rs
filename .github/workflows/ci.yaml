@@ -93,4 +93,5 @@ jobs:
 
     - name: show full log on failure
       if: failure()
-      run: nix log .#checks.x86_64-linux.pre-commit || true
+      continue-on-error: true
+      run: nix log .#checks.x86_64-linux.pre-commit
