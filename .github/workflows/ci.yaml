@@ -68,6 +68,19 @@ jobs:
     - name: dump cargo deps on failure
       if: failure()
       run: ls -la target/debug/deps/
+    - name: inspect secretspec_derive .so on failure
+      if: failure()
+      continue-on-error: true
+      run: |
+        SO=$(find target/debug/deps -maxdepth 1 -name 'libsecretspec_derive-*.so' | head -1)
+        echo "=== file ==="
+        file "$SO"
+        echo "=== readelf -d (dynamic section, NEEDED libs) ==="
+        readelf -d "$SO"
+        echo "=== ldd (resolves dynamic deps) ==="
+        ldd "$SO"
+        echo "=== readelf -S (sections) ==="
+        readelf -S "$SO" | head -40
     - name: rebuild dex-arb verbosely on failure
       if: failure()
       run: nix develop --accept-flake-config .#ci -c cargo build -vv -p dex-arb --locked
