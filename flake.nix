@@ -158,6 +158,16 @@
             inherit nativeBuildInputs buildInputs;
             packages = [ toolchain ];
             LD_LIBRARY_PATH = "${toolchain}/lib";
+            # Nix stdenv defines `_FORTIFY_SOURCE=2` by default, which
+            # glibc rejects in debug builds (`-O0`) with `#warning
+            # _FORTIFY_SOURCE requires compiling with optimization`. The
+            # cc-rs invocations from build-script-heavy crates
+            # (aws-lc-sys, ring) treat that as `-Werror=cpp` and produce
+            # corrupt static libs that downstream rustc cannot load,
+            # surfacing as E0463 "can't find crate" with a 300 MB+
+            # proc-macro `.so`. Disabling fortify in the shell removes
+            # the conflicting flag.
+            hardeningDisable = [ "fortify" ];
           };
         };
 
