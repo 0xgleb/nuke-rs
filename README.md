@@ -107,7 +107,7 @@ independently usable.
 - [docs/architecture.md](docs/architecture.md) - long-form architecture
   reference with diagrams.
 - [adrs/](adrs/) - architectural decision records. See ADR 0001 for why CI runs
-  the nix flake's crane checks.
+  cargo inside `nix develop`.
 - Per-crate `README.md` files document each workspace member's role.
 
 ## Secrets

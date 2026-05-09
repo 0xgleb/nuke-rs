@@ -167,8 +167,8 @@ These are non-negotiable:
 - `ROADMAP.md` - epic-based plan, ordered by priority. First epic is always the
   next thing to implement.
 - `docs/architecture.md` - long-form architecture reference with diagrams.
-- `adrs/` - architectural decision records. ADR 0001 documents why CI runs the
-  nix flake checks.
+- `adrs/` - architectural decision records. ADR 0001 documents why CI runs cargo
+  inside `nix develop` rather than `nix build .#checks...`.
 - `examples/dex_arb/src/main.rs` - the canonical worked example (cross-DEX arb
   with profit check + Job-based execution).
 - `secretspec.toml` - secrets the example needs. Loaded via

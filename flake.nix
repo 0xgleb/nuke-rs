@@ -138,6 +138,18 @@
               }
             ];
           };
+
+          # Pure shell for CI: just the toolchain + system deps, no
+          # devenv (which needs `--impure` and a heavy process tree).
+          # CI runs `nix develop .#ci -c cargo ...` so cargo's stderr
+          # streams straight to the Actions log instead of being
+          # buried under per-derivation `building '/nix/store/...drv'`
+          # progress lines that `nix build` emits and GitHub then
+          # truncates.
+          ci = pkgs.mkShell {
+            inherit nativeBuildInputs buildInputs;
+            packages = [ toolchain ];
+          };
         };
 
         packages = {

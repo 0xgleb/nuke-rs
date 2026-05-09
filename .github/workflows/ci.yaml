@@ -8,47 +8,77 @@ on:
     - master
 
 jobs:
-  checks:
+  cargo:
+    name: cargo ${{ matrix.name }}
+    runs-on: ubuntu-latest
     permissions:
-      checks: write
       contents: read
       id-token: write
-      packages: write
-      pull-requests: write
-      repository-projects: write
-
-    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        check:
-        - workspace-build
-        - workspace-test
-        - workspace-clippy
-        - pre-commit
-        os: [ubuntu-latest]
+        include:
+        - name: build
+          command: cargo build --workspace --all-targets --locked
+        - name: test
+          command: cargo test --workspace --all-targets --locked
+        - name: clippy
+          command: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
 
     steps:
     - uses: actions/checkout@v5
+
     - uses: DeterminateSystems/nix-installer-action@main
+      with:
+        extra-conf: |
+          accept-flake-config = true
+          fallback = true
+
     - uses: DeterminateSystems/magic-nix-cache-action@main
-    - uses: DeterminateSystems/flake-checker-action@main
 
-    # Build each check derivation directly via `nix build`. Avoids
-    # `nix flake check` (which evaluates devenv's `--impure`-only
-    # devShell) and lets each crane derivation cache independently in
-    # the nix binary cache.
-    #
-    # No `--print-build-logs`: that flag streams every compile line,
-    # which buries the actual error when something fails. Without it
-    # Nix stays quiet on success and surfaces just the failed
-    # derivation's stderr tail on failure.
-    - name: "build check: ${{ matrix.check }}"
-      run: nix build --accept-flake-config ".#checks.x86_64-linux.${{ matrix.check }}"
+    - name: Cache cargo artifacts
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/git/db/
+          ~/.cargo/registry/cache/
+          ~/.cargo/registry/index/
+          target/
+        key: cargo-${{ runner.os }}-${{ matrix.name }}-${{ hashFiles('Cargo.lock', 'flake.lock') }}
+        restore-keys: |
+          cargo-${{ runner.os }}-${{ matrix.name }}-
 
-    # On failure, surface the failed derivation's stderr in full so
-    # the GitHub Actions log includes the cargo error context that
-    # `nix build`'s tail summary truncates.
-    - name: "show full log on failure"
+    # Run cargo inside the pure `ci` devShell. The flake owns the
+    # toolchain and system deps (pkg-config, dbus, openssl), so this
+    # keeps the "flake is the source of truth for system deps"
+    # invariant from ADR 0001 while letting cargo's stderr surface
+    # directly in the Actions log.
+    - name: ${{ matrix.name }}
+      run: nix develop --accept-flake-config .#ci -c ${{ matrix.command }}
+
+  hooks:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+    - uses: actions/checkout@v5
+
+    - uses: DeterminateSystems/nix-installer-action@main
+      with:
+        extra-conf: |
+          accept-flake-config = true
+          fallback = true
+
+    - uses: DeterminateSystems/magic-nix-cache-action@main
+
+    - name: pre-commit hooks
+      run: nix build --accept-flake-config .#checks.x86_64-linux.pre-commit
+
+    - name: show full log on failure
       if: failure()
-      run: nix log ".#checks.x86_64-linux.${{ matrix.check }}" || true
+      run: nix log .#checks.x86_64-linux.pre-commit || true
