@@ -146,9 +146,18 @@
           # buried under per-derivation `building '/nix/store/...drv'`
           # progress lines that `nix build` emits and GitHub then
           # truncates.
+          #
+          # `LD_LIBRARY_PATH` includes `${toolchain}/lib` so that
+          # rustc can dlopen proc-macro `.so` files at consumer-crate
+          # compile time. Proc-macros are built with `-C
+          # prefer-dynamic`, which links them against `libstd-*.so`
+          # from the toolchain; without the toolchain's `lib/` on the
+          # loader path, dlopen fails and rustc reports E0463
+          # "can't find crate" with no further detail.
           ci = pkgs.mkShell {
             inherit nativeBuildInputs buildInputs;
             packages = [ toolchain ];
+            LD_LIBRARY_PATH = "${toolchain}/lib";
           };
         };
 
