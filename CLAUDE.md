@@ -167,7 +167,12 @@ These are non-negotiable:
 - `ROADMAP.md` - epic-based plan, ordered by priority. First epic is always the
   next thing to implement.
 - `docs/architecture.md` - long-form architecture reference with diagrams.
+- `adrs/` - architectural decision records. ADR 0001 documents why CI runs cargo
+  via rustup, not through the flake's crane checks.
 - `examples/dex_arb/src/main.rs` - the canonical worked example (cross-DEX arb
   with profit check + Job-based execution).
 - `secretspec.toml` - secrets the example needs. Loaded via
-  `secretspec_derive::declare_secrets!`.
+  `secretspec_derive::declare_secrets!`. The build-time codegen pulls in the
+  `secretspec` -> `keyring` -> `libdbus-sys` chain, which on Linux requires
+  `libdbus-1-dev` + `pkg-config` at compile time. CI installs them via apt; the
+  flake exposes them via `buildInputs`.
