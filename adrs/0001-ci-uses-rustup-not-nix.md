@@ -2,7 +2,17 @@
 
 ## Status
 
-Accepted (2026-05-07).
+Superseded by [ADR 0002](0002-ci-uses-nix-flake-checks.md) (2026-05-09).
+
+The `apt install` step this ADR introduced is incompatible with the repo's
+"flake owns all system deps" invariant: every system library the workspace links
+against must be expressed via `buildInputs` in `flake.nix`, not pulled from the
+GitHub runner's package manager. CI is back on
+`nix build
+.#checks.x86_64-linux.<check>`; libdbus + openssl + pkg-config flow
+through the flake's `buildInputs` (already wired). The original proc-macro `.so`
+failure described below is to be re-diagnosed against the current crane / fenix
+/ secretspec stack rather than worked around with apt.
 
 ## Context
 

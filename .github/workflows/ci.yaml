@@ -7,84 +7,48 @@ on:
     branches:
     - master
 
-# CI runs cargo directly via rustup-installed toolchain instead of
-# through the nix flake's crane-based checks. The flake checks work
-# locally (and on Darwin), but on Linux GitHub runners the crane
-# `cargoArtifacts` cache reproducibly produces a `secretspec_derive`
-# proc-macro `.so` that `rustc` can't load (`E0463 "can't find
-# crate"`), even when the deps phase compiled it cleanly. Plain
-# rustup + cargo sidesteps the entire crane / nix-sandbox /
-# proc-macro interaction and runs in ~3 min instead of ~9 min for
-# the deps phase alone. The flake checks remain wired up for local
-# `nix flake check`; they are not the CI source of truth.
-
-env:
-  CARGO_TERM_COLOR: always
-  RUSTFLAGS: "-D warnings"
-
 jobs:
-  cargo-checks:
-    name: cargo ${{ matrix.kind }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+  checks:
+    permissions:
+      checks: write
+      contents: read
+      id-token: write
+      packages: write
+      pull-requests: write
+      repository-projects: write
+
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-        - kind: build
-          command: cargo build --workspace --all-targets --locked
-        - kind: test
-          command: cargo test --workspace --all-targets --locked
-        - kind: clippy
-          command: cargo clippy --workspace --all-targets --locked -- -D warnings
-    steps:
-    - uses: actions/checkout@v5
+        check:
+        - workspace-build
+        - workspace-test
+        - workspace-clippy
+        - pre-commit
+        os: [ubuntu-latest]
 
-    # `secretspec` -> `keyring` -> `libdbus-sys` link against the
-    # system D-Bus on Linux; without `libdbus-1-dev` the build
-    # script panics with `pkg_config failed`. `pkg-config` is the
-    # discovery tool the build script invokes. The nix flake handles
-    # this via `buildInputs`; on plain GitHub runners we apt-install.
-    - name: install system deps
-      run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libdbus-1-dev pkg-config
-
-    # The toolchain version is read from `rust-toolchain.toml` if
-    # present; otherwise dtolnay/rust-toolchain falls back to the
-    # `toolchain` arg below. We pin to nightly so the workspace's
-    # `edition = "2024"` resolves consistently with local Darwin
-    # builds via fenix.
-    - name: install rust toolchain
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        toolchain: nightly-2026-05-02
-        components: clippy, rustfmt
-
-    - name: cache cargo registry + target
-      uses: Swatinem/rust-cache@v2
-      with:
-        key: ${{ matrix.kind }}
-
-    - name: ${{ matrix.command }}
-      run: ${{ matrix.command }}
-
-  pre-commit:
-    name: pre-commit hooks
-    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v5
     - uses: DeterminateSystems/nix-installer-action@main
     - uses: DeterminateSystems/magic-nix-cache-action@main
+    - uses: DeterminateSystems/flake-checker-action@main
 
-    # Pre-commit hooks (rustfmt, nixfmt, taplo, denofmt, actionlint)
-    # are wired in the flake. Run them via `nix build` of the
-    # `pre-commit` check so the hook environment matches local dev.
-    - name: pre-commit
-      run: nix build --accept-flake-config '.#checks.x86_64-linux.pre-commit'
+    # Build each check derivation directly via `nix build`. Avoids
+    # `nix flake check` (which evaluates devenv's `--impure`-only
+    # devShell) and lets each crane derivation cache independently in
+    # the nix binary cache.
+    #
+    # No `--print-build-logs`: that flag streams every compile line,
+    # which buries the actual error when something fails. Without it
+    # Nix stays quiet on success and surfaces just the failed
+    # derivation's stderr tail on failure.
+    - name: "build check: ${{ matrix.check }}"
+      run: nix build --accept-flake-config ".#checks.x86_64-linux.${{ matrix.check }}"
 
-    - name: tail pre-commit log on failure
+    # On failure, surface the failed derivation's stderr in full so
+    # the GitHub Actions log includes the cargo error context that
+    # `nix build`'s tail summary truncates.
+    - name: "show full log on failure"
       if: failure()
-      run: |
-        log=$(nix log '.#checks.x86_64-linux.pre-commit' 2>/dev/null || true)
-        if [ -n "$log" ]; then
-          printf '%s\n' "$log" | tail -n 100
-        fi
+      run: nix log ".#checks.x86_64-linux.${{ matrix.check }}" || true
