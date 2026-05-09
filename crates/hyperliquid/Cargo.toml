@@ -1,0 +1,17 @@
+[package]
+name = "hyperliquid"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Hyperliquid Source / TradingVenue adapter for the nuke framework. Wraps hyperliquid_rust_sdk behind nuke's Subject / Venue / TradingVenue traits."
+
+[lib]
+path = "src/lib.rs"
+
+# The lib.rs body is currently a stub - no code, no impls. Adding deps
+# here that aren't actually used widens the workspace dep tree and the
+# Cargo.lock unification scope without delivering anything. The
+# hyperliquid_rust_sdk / async-trait / tokio / serde / rust_decimal /
+# thiserror / tracing entries come back as soon as the Source +
+# TradingVenue impls land.
+[dependencies]

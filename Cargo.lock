@@ -1586,6 +1586,7 @@ dependencies = [
  "alloy-sol-types",
  "apalis-core",
  "apalis-workflow",
+ "async-trait",
  "evm",
  "futures-util",
  "nuke",
@@ -2587,6 +2588,10 @@ dependencies = [
  "tower-service",
  "tracing",
 ]
+
+[[package]]
+name = "hyperliquid"
+version = "0.1.0"
 
 [[package]]
 name = "iana-time-zone"

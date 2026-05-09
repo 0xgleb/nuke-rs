@@ -116,30 +116,30 @@ struct NukeAttrs {
 
 impl NukeAttrs {
     fn from_attrs(attrs: &[Attribute]) -> syn::Result<Self> {
-        let mut event: Option<Path> = None;
-        let mut address: Option<LitStr> = None;
-
-        for attr in attrs {
-            if !attr.path().is_ident("nuke") {
-                continue;
-            }
-            attr.parse_nested_meta(|meta| {
-                if meta.path.is_ident("event") {
-                    let value = meta.value()?;
-                    let path: Path = value.parse()?;
-                    event = Some(path);
-                    return Ok(());
-                }
-                if meta.path.is_ident("address") {
-                    let value = meta.value()?;
-                    let lit: LitStr = value.parse()?;
-                    address = Some(lit);
-                    return Ok(());
-                }
-                Err(meta.error("unsupported #[nuke(...)] key; expected `event` or `address`"))
-            })?;
-        }
-
-        Ok(Self { event, address })
+        attrs
+            .iter()
+            .filter(|attr| attr.path().is_ident("nuke"))
+            .try_fold(
+                Self {
+                    event: None,
+                    address: None,
+                },
+                |mut acc, attr| {
+                    attr.parse_nested_meta(|meta| {
+                        let value = meta.value()?;
+                        if meta.path.is_ident("event") {
+                            acc.event = Some(value.parse()?);
+                        } else if meta.path.is_ident("address") {
+                            acc.address = Some(value.parse()?);
+                        } else {
+                            return Err(meta.error(
+                                "unsupported #[nuke(...)] key; expected `event` or `address`",
+                            ));
+                        }
+                        Ok(())
+                    })?;
+                    Ok(acc)
+                },
+            )
     }
 }

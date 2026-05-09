@@ -18,7 +18,7 @@ mod macros;
 mod reason;
 pub mod registry;
 
-pub use action::Action;
+pub use action::{Action, LowerBackend, PolicyGate};
 pub use capability::{Capability, Context, HasInventory, HasMarketData, HasOrder, HasRiskLimits};
 pub use ctx::{CtxError, PolicyCtx, PolicyCtxBuilder, SlotValueWire};
 pub use eval::{EvalError, evaluate};
