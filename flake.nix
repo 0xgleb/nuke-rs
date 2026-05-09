@@ -154,6 +154,27 @@
 
         packages = {
           devenv-up = self.devShells.${system}.default.config.procfileScript;
+
+          # `nix run .#ci` - the same cargo command set CI runs, in
+          # the same order, so contributors can reproduce CI locally
+          # before pushing. Mirrors the `cargo` matrix in
+          # .github/workflows/ci.yaml.
+          ci = pkgs.writeShellApplication {
+            name = "ci";
+            runtimeInputs = nativeBuildInputs ++ buildInputs ++ [ toolchain ];
+            text = ''
+              set -euxo pipefail
+              cargo build --workspace --all-targets --locked
+              cargo test --workspace --all-targets --locked
+              cargo clippy --workspace --all-targets --locked -- -D warnings
+              cargo fmt --all -- --check
+            '';
+          };
+        };
+
+        apps.ci = {
+          type = "app";
+          program = "${self.packages.${system}.ci}/bin/ci";
         };
 
         # The full CI surface lives here. CI runs `nix flake check`
