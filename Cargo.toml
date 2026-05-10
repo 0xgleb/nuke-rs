@@ -115,3 +115,9 @@ trybuild = "1.0.116"
 debug = 0
 [profile.test.package."*"]
 debug = 0
+# `package."*"` covers ordinary library deps; proc-macros / build
+# scripts compile under `build-override` and need the same knob.
+[profile.dev.build-override]
+debug = 0
+[profile.test.build-override]
+debug = 0
