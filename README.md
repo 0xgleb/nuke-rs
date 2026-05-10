@@ -106,6 +106,8 @@ independently usable.
 - [ROADMAP.md](ROADMAP.md) - epic-based plan, ordered by priority.
 - [docs/architecture.md](docs/architecture.md) - long-form architecture
   reference with diagrams.
+- [adrs/](adrs/) - architectural decision records. See ADR 0001 for why CI runs
+  cargo inside `nix develop`.
 - Per-crate `README.md` files document each workspace member's role.
 
 ## Secrets

@@ -49,5 +49,16 @@ compile time / by clippy / by CI:
 ## Status
 
 Pre-alpha. APIs may change. The eDSL backends are stable; the policy ->
-apalis_workflow `DagFlow` compiler is v0 (lowers Do leaves; per-node
-verdict-layer decomposition is the next iteration).
+apalis_workflow `DagFlow` compiler is v2:
+
+- Lowers each `Do` leaf into the verb's `Action::lower` sub-DAG.
+- Emits one apalis predicate task per `RejectIf` / `EscalateIf` / `Given`
+  condition (`PolicyCtx -> bool`).
+- Emits one verdict task per compiled rule (`PolicyCtx -> DecisionTag`) that
+  runs the full evaluator pass and produces the wire-friendly verdict
+  discriminant.
+
+Per-rule combinator nodes for `All` / `Any` / `Bind` / `Given` gating, plus the
+Allow-route gate from verdict to actions (which requires extending
+`Action::lower` so verb entry nodes can depend on the verdict), are the next
+iterations.

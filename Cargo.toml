@@ -6,6 +6,7 @@ members = [
   "crates/event-sorcery",
   "crates/evm",
   "crates/evm-derive",
+  "crates/hyperliquid",
   "examples/dex_arb",
   "examples/uptime_monitor",
 ]
@@ -54,6 +55,10 @@ tower = { version = "0.5.3", default-features = false, features = ["util"] }
 apalis = "=1.0.0-rc.7"
 apalis-core = "=1.0.0-rc.7"
 apalis-workflow = "=0.1.0-rc.7"
+# Test-only file storage backend used by the policy -> DagFlow tests
+# to exercise apalis-workflow's Codec bounds end-to-end. Not used in
+# any framework or example runtime path.
+apalis-file-storage = "=0.1.0-rc.7"
 
 # Retry / backoff helpers used by the Job trait's `work` handler.
 backon = "1.6"
@@ -61,6 +66,12 @@ backon = "1.6"
 # EVM types (used by the `evm` adapter crate; framework crates do not depend on these)
 alloy-primitives = { version = "1.5", features = ["serde"] }
 alloy-sol-types = "1.5"
+
+# Hyperliquid SDK (used by the `hyperliquid` adapter crate; framework
+# crates do not depend on this). Pulls in legacy `ethers 2.0.14` for
+# its EIP-712 signing path - acceptable as a transitive dep for an
+# adapter crate that already lives outside the framework boundary.
+hyperliquid_rust_sdk = "0.6.0"
 
 # Domain primitives - Decimal everywhere, never f64 (see CLAUDE.md).
 rust_decimal = { version = "1.41", features = ["serde"] }
@@ -91,3 +102,22 @@ syn = { version = "2", features = ["full", "extra-traits"] }
 
 # Test deps
 trybuild = "1.0.116"
+
+# Drop debug info on third-party dependencies in dev builds. The
+# `secretspec_derive` proc-macro statically links the full
+# `secretspec` runtime (AWS SDK + keyring), which with
+# `-C prefer-dynamic` produces a 300+ MB `.so` whose embedded DWARF
+# blows up rustc's proc-macro loader on Linux (manifests as bare
+# E0463 "can't find crate"). Stripping debug info from deps shrinks
+# the proc-macro `.so` to a normal size without affecting workspace
+# debug ergonomics.
+[profile.dev.package."*"]
+debug = 0
+[profile.test.package."*"]
+debug = 0
+# `package."*"` covers ordinary library deps; proc-macros / build
+# scripts compile under `build-override` and need the same knob.
+[profile.dev.build-override]
+debug = 0
+[profile.test.build-override]
+debug = 0

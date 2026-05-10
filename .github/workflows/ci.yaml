@@ -8,34 +8,107 @@ on:
     - master
 
 jobs:
-  checks:
+  cargo:
+    name: cargo ${{ matrix.name }}
+    runs-on: ubuntu-latest
     permissions:
-      checks: write
       contents: read
       id-token: write
-      packages: write
-      pull-requests: write
-      repository-projects: write
-
-    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        check:
-        - workspace-build
-        - workspace-test
-        - workspace-clippy
-        - pre-commit
-        os: [ubuntu-latest]
+        include:
+        - name: build
+          command: cargo build --workspace --all-targets --locked
+        - name: test
+          command: cargo test --workspace --all-targets --locked
+        - name: clippy
+          command: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
 
     steps:
     - uses: actions/checkout@v5
-    - uses: DeterminateSystems/nix-installer-action@main
-    - uses: DeterminateSystems/magic-nix-cache-action@main
-    - uses: DeterminateSystems/flake-checker-action@main
 
-    # Build each check derivation directly via `nix build`. Avoids
-    # `nix flake check` (which evaluates devenv's `--impure`-only
-    # devShell) and lets each crane derivation cache independently in
-    # the nix binary cache.
-    - name: "build check: ${{ matrix.check }}"
-      run: nix build --accept-flake-config --print-build-logs ".#checks.x86_64-linux.${{ matrix.check }}"
+    - uses: DeterminateSystems/nix-installer-action@main
+      with:
+        extra-conf: |
+          accept-flake-config = true
+          fallback = true
+
+    - uses: DeterminateSystems/magic-nix-cache-action@main
+
+    - name: Cache cargo artifacts
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/git/db/
+          ~/.cargo/registry/cache/
+          ~/.cargo/registry/index/
+          target/
+        # v2 prefix: bumped after switching to debug=0 profile to
+        # force a full rebuild past the v1 cached `target/` (cargo's
+        # fingerprint check accepted the stale 72 MB proc-macro `.so`
+        # served by `restore-keys` fallback).
+        key: cargo-v2-${{ runner.os }}-${{ matrix.name }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'flake.lock') }}
+        restore-keys: |
+          cargo-v2-${{ runner.os }}-${{ matrix.name }}-
+
+    # Run cargo inside the pure `ci` devShell. The flake owns the
+    # toolchain and system deps (pkg-config, dbus, openssl), so this
+    # keeps the "flake is the source of truth for system deps"
+    # invariant from ADR 0001 while letting cargo's stderr surface
+    # directly in the Actions log.
+    - name: ${{ matrix.name }}
+      run: nix develop --accept-flake-config .#ci -c ${{ matrix.command }}
+
+    # On failure, dump everything that rustc would have looked at when
+    # loading proc-macro `.so` files. The build/test/clippy runs hit
+    # E0463 for `secretspec_derive` on Linux but pass on Darwin; the
+    # delta usually shows up in the deps dir (artifact missing or wrong
+    # extension) or in cargo's verbose rustc invocation.
+    - name: dump cargo deps on failure
+      if: failure()
+      run: ls -la target/debug/deps/
+    - name: inspect secretspec_derive .so on failure
+      if: failure()
+      continue-on-error: true
+      run: |
+        SO=$(find target/debug/deps -maxdepth 1 -name 'libsecretspec_derive-*.so' | head -1)
+        echo "=== file ==="
+        file "$SO"
+        echo "=== readelf -d (dynamic section, NEEDED libs) ==="
+        readelf -d "$SO"
+        echo "=== ldd (resolves dynamic deps) ==="
+        ldd "$SO"
+        echo "=== readelf -S (sections) ==="
+        readelf -S "$SO" | head -40
+    - name: rebuild dex-arb verbosely on failure
+      if: failure()
+      run: nix develop --accept-flake-config .#ci -c cargo build -vv -p dex-arb --locked
+
+  hooks:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+    - uses: actions/checkout@v5
+
+    - uses: DeterminateSystems/nix-installer-action@main
+      with:
+        extra-conf: |
+          accept-flake-config = true
+          fallback = true
+
+    - uses: DeterminateSystems/magic-nix-cache-action@main
+
+    - name: pre-commit hooks
+      run: nix build --accept-flake-config .#checks.x86_64-linux.pre-commit
+
+    - name: show full log on failure
+      if: failure()
+      continue-on-error: true
+      run: nix log .#checks.x86_64-linux.pre-commit

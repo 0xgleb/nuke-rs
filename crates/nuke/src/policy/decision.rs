@@ -5,7 +5,7 @@
 //! types that don't appear here can't be returned by a rule, which keeps
 //! every backend's match exhaustive.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::policy::reason::{Bindings, Reason};
 
@@ -47,6 +47,37 @@ impl Decision {
     /// True iff this decision defers to an escalation handler.
     pub fn is_escalate(&self) -> bool {
         matches!(self, Self::Escalate { .. })
+    }
+
+    /// Wire-friendly verdict discriminant. Drops the `Reason` /
+    /// `Bindings` payload (which uses `&'static str` and isn't
+    /// `Deserialize`); the policy DAG's verdict node emits this
+    /// shape so downstream nodes can route on the verdict alone.
+    pub fn tag(&self) -> DecisionTag {
+        match self {
+            Self::Allow => DecisionTag::Allow,
+            Self::Deny { .. } => DecisionTag::Deny,
+            Self::Escalate { .. } => DecisionTag::Escalate,
+        }
+    }
+}
+
+/// Wire-friendly verdict discriminant. Used by the policy ->
+/// `DagFlow` compiler so the verdict task's output round-trips
+/// through serde without dragging the structured `Reason` /
+/// `Bindings` payload (which uses `&'static str` and can't be
+/// `Deserialize`d). The runtime evaluator path still produces the
+/// rich [`Decision`]; the wire variant is for cross-task gating.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum DecisionTag {
+    Allow,
+    Deny,
+    Escalate,
+}
+
+impl DecisionTag {
+    pub fn is_allow(&self) -> bool {
+        matches!(self, Self::Allow)
     }
 }
 

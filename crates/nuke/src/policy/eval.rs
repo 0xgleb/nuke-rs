@@ -164,7 +164,10 @@ fn eval_expr<C: Context>(
     }
 }
 
-fn eval_bool<C: Context>(
+/// Evaluate one boolean predicate expression. Used by the runtime
+/// evaluator and by the per-node policy DAG compiler to run a single
+/// predicate at an apalis task.
+pub fn eval_bool<C: Context>(
     expr: &InnerExpr,
     ctx: &C,
     bindings: &Bindings,

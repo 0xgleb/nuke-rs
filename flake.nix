@@ -138,10 +138,62 @@
               }
             ];
           };
+
+          # Pure shell for CI: just the toolchain + system deps, no
+          # devenv (which needs `--impure` and a heavy process tree).
+          # CI runs `nix develop .#ci -c cargo ...` so cargo's stderr
+          # streams straight to the Actions log instead of being
+          # buried under per-derivation `building '/nix/store/...drv'`
+          # progress lines that `nix build` emits and GitHub then
+          # truncates.
+          #
+          # `LD_LIBRARY_PATH` includes `${toolchain}/lib` so that
+          # rustc can dlopen proc-macro `.so` files at consumer-crate
+          # compile time. Proc-macros are built with `-C
+          # prefer-dynamic`, which links them against `libstd-*.so`
+          # from the toolchain; without the toolchain's `lib/` on the
+          # loader path, dlopen fails and rustc reports E0463
+          # "can't find crate" with no further detail.
+          ci = pkgs.mkShell {
+            inherit nativeBuildInputs buildInputs;
+            packages = [ toolchain ];
+            LD_LIBRARY_PATH = "${toolchain}/lib";
+            # Nix stdenv defines `_FORTIFY_SOURCE=2` by default, which
+            # glibc rejects in debug builds (`-O0`) with `#warning
+            # _FORTIFY_SOURCE requires compiling with optimization`. The
+            # cc-rs invocations from build-script-heavy crates
+            # (aws-lc-sys, ring) treat that as `-Werror=cpp` and produce
+            # corrupt static libs that downstream rustc cannot load,
+            # surfacing as E0463 "can't find crate" with a 300 MB+
+            # proc-macro `.so`. Disabling fortify in the shell removes
+            # the conflicting flag.
+            hardeningDisable = [ "fortify" ];
+          };
         };
 
         packages = {
           devenv-up = self.devShells.${system}.default.config.procfileScript;
+
+          # `nix run .#ci` - the same cargo command set CI runs, in
+          # the same order, so contributors can reproduce CI locally
+          # before pushing. Mirrors the `cargo` matrix in
+          # .github/workflows/ci.yaml.
+          ci = pkgs.writeShellApplication {
+            name = "ci";
+            runtimeInputs = nativeBuildInputs ++ buildInputs ++ [ toolchain ];
+            text = ''
+              set -euxo pipefail
+              cargo build --workspace --all-targets --locked
+              cargo test --workspace --all-targets --locked
+              cargo clippy --workspace --all-targets --locked -- -D warnings
+              cargo fmt --all -- --check
+            '';
+          };
+        };
+
+        apps.ci = {
+          type = "app";
+          program = "${self.packages.${system}.ci}/bin/ci";
         };
 
         # The full CI surface lives here. CI runs `nix flake check`

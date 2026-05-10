@@ -21,40 +21,14 @@ use syn::{Data, DeriveInput, Field, Fields, Ident, Type, TypePath, parse2};
 
 pub(crate) fn expand(input: TokenStream) -> syn::Result<TokenStream> {
     let derive: DeriveInput = parse2(input)?;
-    let struct_ident = derive.ident.clone();
+    let struct_ident = &derive.ident;
     let struct_ident_str = struct_ident.to_string();
     let entity_name = to_snake_case(&struct_ident_str);
     let module_ident = format_ident!("{}", entity_name);
 
-    let fields = struct_fields(&derive)?;
-    let (accessors, read_arms): (Vec<TokenStream>, Vec<TokenStream>) = fields
+    let (accessors, read_arms): (Vec<TokenStream>, Vec<TokenStream>) = struct_fields(&derive)?
         .into_iter()
-        .map(|field| {
-            let name_ident = field.ident.as_ref().ok_or_else(|| {
-                syn::Error::new_spanned(field, "tuple structs are not supported")
-            })?;
-            let name_str = name_ident.to_string();
-            let mapping = type_mapping(&field.ty)?;
-            let tag = format_ident!("{}", mapping.tag);
-            let slot = format_ident!("{}", mapping.slot_variant);
-            let entity_lit = entity_name.clone();
-            let name_lit = name_str.clone();
-
-            let accessor = quote! {
-                #[doc = concat!("Typed AST reference to `", #struct_ident_str, ".", #name_lit, "`.")]
-                pub fn #name_ident()
-                    -> ::nuke::policy::ast::Expr<::nuke::policy::ast::#tag>
-                {
-                    ::nuke::policy::ast::field::<::nuke::policy::ast::#tag>(#entity_lit, #name_lit)
-                }
-            };
-            let read_arm = quote! {
-                #name_lit => ::core::option::Option::Some(
-                    ::nuke::policy::SlotValue::#slot(self.#name_ident.clone())
-                ),
-            };
-            Ok::<_, syn::Error>((accessor, read_arm))
-        })
+        .map(|field| expand_field(&struct_ident_str, &entity_name, field))
         .collect::<syn::Result<Vec<_>>>()?
         .into_iter()
         .unzip();
@@ -79,6 +53,41 @@ pub(crate) fn expand(input: TokenStream) -> syn::Result<TokenStream> {
             pub const ENTITY_NAME: &'static str = #entity_name;
         }
     })
+}
+
+/// Lower a single struct field into the matching `(accessor_fn,
+/// read_field_match_arm)` pair. Pure: takes the parent struct's
+/// display name and snake_case entity name, returns two
+/// [`TokenStream`]s that get spliced into the parent module + impl
+/// block in [`expand`].
+fn expand_field(
+    struct_ident_str: &str,
+    entity_name: &str,
+    field: &Field,
+) -> syn::Result<(TokenStream, TokenStream)> {
+    let name_ident = field
+        .ident
+        .as_ref()
+        .ok_or_else(|| syn::Error::new_spanned(field, "tuple structs are not supported"))?;
+    let name_str = name_ident.to_string();
+    let mapping = type_mapping(&field.ty)?;
+    let tag = format_ident!("{}", mapping.tag);
+    let slot = format_ident!("{}", mapping.slot_variant);
+
+    let accessor = quote! {
+        #[doc = concat!("Typed AST reference to `", #struct_ident_str, ".", #name_str, "`.")]
+        pub fn #name_ident()
+            -> ::nuke::policy::ast::Expr<::nuke::policy::ast::#tag>
+        {
+            ::nuke::policy::ast::field::<::nuke::policy::ast::#tag>(#entity_name, #name_str)
+        }
+    };
+    let read_arm = quote! {
+        #name_str => ::core::option::Option::Some(
+            ::nuke::policy::SlotValue::#slot(self.#name_ident.clone())
+        ),
+    };
+    Ok((accessor, read_arm))
 }
 
 fn struct_fields(derive: &DeriveInput) -> syn::Result<Vec<&Field>> {
