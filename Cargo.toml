@@ -102,3 +102,16 @@ syn = { version = "2", features = ["full", "extra-traits"] }
 
 # Test deps
 trybuild = "1.0.116"
+
+# Drop debug info on third-party dependencies in dev builds. The
+# `secretspec_derive` proc-macro statically links the full
+# `secretspec` runtime (AWS SDK + keyring), which with
+# `-C prefer-dynamic` produces a 300+ MB `.so` whose embedded DWARF
+# blows up rustc's proc-macro loader on Linux (manifests as bare
+# E0463 "can't find crate"). Stripping debug info from deps shrinks
+# the proc-macro `.so` to a normal size without affecting workspace
+# debug ergonomics.
+[profile.dev.package."*"]
+debug = 0
+[profile.test.package."*"]
+debug = 0
