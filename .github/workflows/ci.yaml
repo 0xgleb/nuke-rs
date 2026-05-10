@@ -48,9 +48,13 @@ jobs:
           ~/.cargo/registry/cache/
           ~/.cargo/registry/index/
           target/
-        key: cargo-${{ runner.os }}-${{ matrix.name }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'flake.lock') }}
+        # v2 prefix: bumped after switching to debug=0 profile to
+        # force a full rebuild past the v1 cached `target/` (cargo's
+        # fingerprint check accepted the stale 72 MB proc-macro `.so`
+        # served by `restore-keys` fallback).
+        key: cargo-v2-${{ runner.os }}-${{ matrix.name }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'flake.lock') }}
         restore-keys: |
-          cargo-${{ runner.os }}-${{ matrix.name }}-
+          cargo-v2-${{ runner.os }}-${{ matrix.name }}-
 
     # Run cargo inside the pure `ci` devShell. The flake owns the
     # toolchain and system deps (pkg-config, dbus, openssl), so this
